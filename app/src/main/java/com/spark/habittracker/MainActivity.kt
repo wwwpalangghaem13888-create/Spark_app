@@ -163,8 +163,16 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
         "pink" -> Color(0xFFFF75C8)
         else -> Color(0xFF9A63FF)
     }
-    val background = if (settings.theme == "minimal") Color(0xFF101820) else Color(0xFF090716)
-    val surface = if (settings.theme == "minimal") Color(0xFF1B2731) else Color(0xFF151127)
+    val background = when (settings.theme) {
+        "minimal" -> Color(0xFF101820)
+        "dark" -> Color(0xFF111318)
+        else -> Color(0xFF090716)
+    }
+    val surface = when (settings.theme) {
+        "minimal" -> Color(0xFF1B2731)
+        "dark" -> Color(0xFF20232A)
+        else -> Color(0xFF151127)
+    }
     val palette = SparkPalette(background, surface, surface.copy(alpha = 0.78f), accent, accent.copy(alpha = 0.75f), Color(0xFF72DDE0), Color(0xFFA9A0C2), Color(0xFFF8F5FF))
     CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides LayoutDirection.Rtl) {
         MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.Black, onBackground = palette.foreground, onSurface = palette.foreground), content = content)
@@ -188,8 +196,18 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     LaunchedEffect(savedSettings) { if (savedSettings == null) dao.saveSettings(UserSettingsEntity()) }
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
     val validHabitIds = habits.map { it.id }.toSet()
-    val completedCount = done.intersect(validHabitIds).size
-    val progress = calculateCompletionRate(completedCount, validHabitIds.size)
+    val scheduledHabits = habits.filter { habit ->
+        habit.isEnabled &&
+            !date.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
+            date.dayOfWeek.name in habit.scheduledDays.split(",")
+    }
+    val todayHabits = habits.filter { habit ->
+        habit.isEnabled &&
+            !LocalDate.now().isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
+            LocalDate.now().dayOfWeek.name in habit.scheduledDays.split(",")
+    }
+    val completedCount = done.intersect(scheduledHabits.map { it.id }.toSet()).size
+    val progress = calculateCompletionRate(completedCount, scheduledHabits.size)
     Scaffold(containerColor = Ink,
         topBar = { TopAppBar(title = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
@@ -208,13 +226,13 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                0 -> Dashboard(habits, done, progress, settings.reducedMotion,
+                0 -> Dashboard(scheduledHabits, done, progress, settings.reducedMotion,
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
-                1 -> History(date, { date = it }, habits, done)
+                1 -> History(date, { date = it }, scheduledHabits, done)
                 2 -> Statistics(habits, allLogs)
-                else -> ProgressHub(habits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
+                else -> ProgressHub(todayHabits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
             }
         }
     }
@@ -348,9 +366,23 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
     val today = LocalDate.now()
     val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
     val byDate = logs.filter { it.isCompleted }.groupBy { it.date }
-    val completed = days.sumOf { byDate[it.toString()]?.size ?: 0 }
-    val possible = habits.sumOf { habit -> days.count { day -> !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) } }
-    val rate = if (possible == 0) 0 else (completed.toFloat() / possible * 100).toInt().coerceAtMost(100)
+    val eligibleHabits = habits.filter { it.isEnabled }
+    val completed = logs.count { log ->
+        log.isCompleted && eligibleHabits.any { habit ->
+            habit.id == log.habitId && runCatching {
+                val day = LocalDate.parse(log.date)
+                !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
+                    day.dayOfWeek.name in habit.scheduledDays.split(",")
+            }.getOrDefault(false)
+        }
+    }
+    val possible = eligibleHabits.sumOf { habit ->
+        days.count { day ->
+            !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
+                day.dayOfWeek.name in habit.scheduledDays.split(",")
+        }
+    }
+    val rate = (calculateCompletionRate(completed, possible) * 100f).roundToInt()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(18.dp)) {
             Text("عملکرد هفت روز اخیر", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -361,7 +393,11 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
         item { Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             days.forEach { day ->
                 val count = byDate[day.toString()]?.size ?: 0
-                val ratio = if (habits.isEmpty()) 0f else (count.toFloat() / habits.size).coerceIn(0f, 1f)
+                val expected = eligibleHabits.count { habit ->
+                    !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
+                        day.dayOfWeek.name in habit.scheduledDays.split(",")
+                }
+                val ratio = calculateCompletionRate(count, expected)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Box(Modifier.width(24.dp).height(100.dp), contentAlignment = Alignment.BottomCenter) { Box(Modifier.fillMaxWidth().fillMaxHeight(ratio).clip(RoundedCornerShape(8.dp)).background(Violet)) }
                     Text(day.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale("fa")), color = Muted, fontSize = 10.sp)
