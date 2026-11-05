@@ -4,7 +4,17 @@ Spark is a Persian, right-to-left Android habit tracker built with Kotlin, Jetpa
 
 ## Product features
 
+### Existing Spark foundation
+
 - Create, edit, and delete habits with locally stored completion history.
+
+### Spark 5.0 implementation in progress
+- Dedicated task domain model and Room table, added through a non-destructive v3-to-v4 migration.
+- Task creation, editing, completion, archive, and permanent deletion.
+- Task categories, descriptions, tags, due dates, four priority levels, and search/filter views.
+- Overdue detection based on ISO local dates; malformed dates are ignored safely rather than crashing the task list.
+- Task repository boundary keeps input normalization and persistence rules outside Compose screens.
+- Unit tests for task deadline and priority rules.
 - Preserve legacy task schedules, reminder-time metadata, enabled state, and completion timestamps during Room migrations.
 - Date-based history with previous/next-day navigation.
 - Seven-day statistics and current-month completion totals calculated from actual records and each habit's saved schedule.
@@ -36,6 +46,17 @@ gradle testDebugUnitTest assembleDebug
 The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
 GitHub Actions runs unit tests and assembles the debug APK on pushes to `main` and `master`, and on pull requests targeting the main branches. The APK is uploaded as `Spark-debug-apk`.
+
+## Spark 5.0 status
+
+Spark 5.0 is being developed on the dedicated `spark-5.0` branch, based on the latest existing Spark development branch so the current working product is retained. The original `main` branch is not modified. This branch is an active engineering build, not a completed release.
+
+### Next engineering areas
+- Expand tasks with recurrence, subtasks, reminders, and richer completion history.
+- Add calendar, goals, focus sessions, data-backed analytics, and streak calculations.
+- Add notification scheduling, real home-screen widgets, and backup/restore.
+- Move remaining legacy UI/database code into clearer presentation, domain, and data packages.
+- Add migration and interaction tests, then verify debug and release builds.
 
 ## Current limitations
 
