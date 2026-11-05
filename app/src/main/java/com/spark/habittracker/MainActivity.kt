@@ -121,7 +121,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
             listOf("خانه" to Icons.Default.Home, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights).forEachIndexed { i, item ->
-                NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
+                NavigationBarItem(selected = tab == i, onClick = { tab = i; if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Lime, selectedTextColor = Lime, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
         } },
@@ -238,7 +238,7 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
     val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
     val byDate = logs.filter { it.isCompleted }.groupBy { it.date }
     val completed = days.sumOf { byDate[it.toString()]?.size ?: 0 }
-    val possible = habits.size * 7
+    val possible = habits.sumOf { habit -> days.count { day -> !day.isBefore(LocalDate.ofEpochDay(habit.createdAt / 86_400_000L)) } }
     val rate = if (possible == 0) 0 else (completed.toFloat() / possible * 100).toInt().coerceAtMost(100)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(18.dp)) {
