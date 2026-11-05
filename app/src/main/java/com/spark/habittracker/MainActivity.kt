@@ -32,6 +32,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -238,7 +240,7 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
     val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
     val byDate = logs.filter { it.isCompleted }.groupBy { it.date }
     val completed = days.sumOf { byDate[it.toString()]?.size ?: 0 }
-    val possible = habits.sumOf { habit -> days.count { day -> !day.isBefore(LocalDate.ofEpochDay(habit.createdAt / 86_400_000L)) } }
+    val possible = habits.sumOf { habit -> days.count { day -> !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) } }
     val rate = if (possible == 0) 0 else (completed.toFloat() / possible * 100).toInt().coerceAtMost(100)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(18.dp)) {
