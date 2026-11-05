@@ -90,9 +90,10 @@ interface HabitDao {
     @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class], version = 3, exportSchema = false)
+@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class], version = 4, exportSchema = false)
 abstract class SparkDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
+    abstract fun taskDao(): TaskDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -128,6 +129,27 @@ abstract class SparkDatabase : RoomDatabase() {
                 db.execSQL("DROP TABLE tasks")
             }
         }
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    dueDate TEXT,
+                    priority INTEGER NOT NULL,
+                    tags TEXT NOT NULL,
+                    completed INTEGER NOT NULL,
+                    completedAt INTEGER,
+                    archived INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tasks_dueDate ON tasks(dueDate)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tasks_archived_completed ON tasks(archived, completed)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tasks_priority ON tasks(priority)")
+            }
+        }
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE habits ADD COLUMN scheduledDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'")
@@ -157,7 +179,7 @@ abstract class SparkDatabase : RoomDatabase() {
 }
 
 class MainActivity : ComponentActivity() {
-    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3).build() }
+    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3, SparkDatabase.MIGRATION_3_4).build() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -198,6 +220,10 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     var date by remember { mutableStateOf(LocalDate.now()) }
     var editorOpen by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<HabitEntity?>(null) }
+    var taskEditorOpen by remember { mutableStateOf(false) }
+    var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
+    val taskRepository = remember(db) { TaskRepository(db.taskDao()) }
+    val tasks by taskRepository.observeActiveTasks().collectAsState(initial = emptyList())
     val habits by dao.observeHabits().collectAsState(initial = emptyList())
     val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
     val todayLogs by remember { dao.observeLogs(LocalDate.now().toString()) }.collectAsState(initial = emptyList())
@@ -225,16 +251,16 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
                 Text("SPARK", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text(listOf("عادت‌های روزانه", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها")[tab], color = Muted, fontSize = 12.sp)
+                Text(listOf("عادت‌های روزانه", "مدیریت وظایف", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها")[tab], color = Muted, fontSize = 12.sp)
             }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
-            listOf("خانه" to Icons.Default.Home, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents).forEachIndexed { i, item ->
+            listOf("خانه" to Icons.Default.Home, "وظایف" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents).forEachIndexed { i, item ->
                 NavigationBarItem(selected = tab == i, onClick = { tab = i; if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
         } },
-        floatingActionButton = { if (tab == 0) FloatingActionButton(onClick = { editing = null; editorOpen = true }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, "افزودن عادت") } }
+        floatingActionButton = { if (tab == 0 || tab == 1) FloatingActionButton(onClick = { if (tab == 1) { editingTask = null; taskEditorOpen = true } else { editing = null; editorOpen = true } }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, if (tab == 1) "افزودن وظیفه" else "افزودن عادت") } }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
@@ -242,8 +268,15 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
-                1 -> History(date, { date = it }, scheduledHabits, done)
-                2 -> Statistics(habits, allLogs)
+                1 -> TaskListScreen(
+                    tasks = tasks,
+                    onToggle = { task, completed -> scope.launch { taskRepository.setCompleted(task, completed) } },
+                    onEdit = { editingTask = it; taskEditorOpen = true },
+                    onArchive = { task -> scope.launch { taskRepository.archive(task.id) } },
+                    onDelete = { task -> scope.launch { taskRepository.deletePermanently(task.id) } }
+                )
+                2 -> History(date, { date = it }, scheduledHabits, done)
+                3 -> Statistics(habits, allLogs)
                 else -> ProgressHub(todayHabits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
             }
         }
@@ -261,6 +294,17 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
         }
         editorOpen = false
     }
+    if (taskEditorOpen) TaskEditorDialog(
+        initial = editingTask,
+        onDismiss = { taskEditorOpen = false; editingTask = null },
+        onSave = { task ->
+            scope.launch {
+                taskRepository.save(task)
+                taskEditorOpen = false
+                editingTask = null
+            }
+        }
+    )
 }
 
 @Composable
