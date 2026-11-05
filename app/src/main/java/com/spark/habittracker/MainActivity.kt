@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +27,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -56,17 +60,45 @@ interface HabitDao {
     @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class], version = 1, exportSchema = false)
-abstract class SparkDatabase : RoomDatabase() { abstract fun habitDao(): HabitDao }
+@Database(entities = [HabitEntity::class, HabitLogEntity::class], version = 2, exportSchema = false)
+abstract class SparkDatabase : RoomDatabase() {
+    abstract fun habitDao(): HabitDao
+
+    companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS habits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    title TEXT NOT NULL, note TEXT NOT NULL, category TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )""")
+                db.execSQL("""INSERT INTO habits (id, title, note, category, createdAt)
+                    SELECT id, title, description, category, CAST(strftime('%s','now') AS INTEGER) * 1000
+                    FROM tasks""")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS habit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    habitId INTEGER NOT NULL, date TEXT NOT NULL, isCompleted INTEGER NOT NULL,
+                    FOREIGN KEY(habitId) REFERENCES habits(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_habit_logs_habitId_date ON habit_logs(habitId, date)")
+                db.execSQL("""INSERT INTO habit_logs (id, habitId, date, isCompleted)
+                    SELECT id, taskId, date, isCompleted FROM task_logs
+                    WHERE taskId IN (SELECT id FROM habits)""")
+                db.execSQL("DROP TABLE task_logs")
+                db.execSQL("DROP TABLE tasks")
+            }
+        }
+    }
+}
 
 class MainActivity : ComponentActivity() {
-    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_habits.db").build() }
+    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2).build() }
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { SparkTheme { SparkApp(db.habitDao(), db) } } }
 }
 
 @Composable
 private fun SparkTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = darkColorScheme(primary = Lime, secondary = Cyan, background = Ink, surface = Panel, onPrimary = Ink, onBackground = White, onSurface = White), content = content)
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { MaterialTheme(colorScheme = darkColorScheme(primary = Lime, secondary = Cyan, background = Ink, surface = Panel, onPrimary = Ink, onBackground = White, onSurface = White), content = content) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
