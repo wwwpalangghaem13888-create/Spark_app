@@ -56,7 +56,8 @@ interface HabitDao {
     @Query("SELECT * FROM habits ORDER BY createdAt DESC") fun observeHabits(): Flow<List<HabitEntity>>
     @Query("SELECT * FROM habit_logs WHERE date = :date") fun observeLogs(date: String): Flow<List<HabitLogEntity>>
     @Query("SELECT * FROM habit_logs") fun observeAllLogs(): Flow<List<HabitLogEntity>>
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveHabit(habit: HabitEntity)
+    @Insert suspend fun insertHabit(habit: HabitEntity): Long
+    @Update suspend fun updateHabit(habit: HabitEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveLog(log: HabitLogEntity)
     @Query("DELETE FROM habit_logs WHERE habitId = :id") suspend fun deleteLogs(id: Long)
     @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
@@ -141,7 +142,10 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
         }
     }
     if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category ->
-        scope.launch { dao.saveHabit(HabitEntity(id = editing?.id ?: 0, title = title.trim(), note = note.trim(), category = category.trim().ifBlank { "عمومی" }, createdAt = editing?.createdAt ?: System.currentTimeMillis())) }
+        scope.launch {
+            val habit = HabitEntity(id = editing?.id ?: 0, title = title.trim(), note = note.trim(), category = category.trim().ifBlank { "عمومی" }, createdAt = editing?.createdAt ?: System.currentTimeMillis())
+            if (editing == null) dao.insertHabit(habit) else dao.updateHabit(habit)
+        }
         editorOpen = false
     }
 }
