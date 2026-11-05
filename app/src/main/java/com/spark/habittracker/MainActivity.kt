@@ -147,7 +147,10 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val habits by dao.observeHabits().collectAsState(initial = emptyList())
     val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
     val allLogs by dao.observeAllLogs().collectAsState(initial = emptyList())
+    val savedSettings by dao.observeSettings().collectAsState(initial = null)
+    val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
+    LaunchedEffect(savedSettings) { if (savedSettings == null) dao.saveSettings(UserSettingsEntity()) }
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
     val validHabitIds = habits.map { it.id }.toSet()
     val completedCount = done.intersect(validHabitIds).size
@@ -157,11 +160,11 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
                 Text("SPARK", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text(listOf("عادت‌های روزانه", "مرور روزها", "گزارش عملکرد")[tab], color = Muted, fontSize = 12.sp)
+                Text(listOf("عادت‌های روزانه", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها")[tab], color = Muted, fontSize = 12.sp)
             }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
-            listOf("خانه" to Icons.Default.Home, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights).forEachIndexed { i, item ->
+            listOf("خانه" to Icons.Default.Home, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents).forEachIndexed { i, item ->
                 NavigationBarItem(selected = tab == i, onClick = { tab = i; if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
@@ -175,13 +178,20 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
                 1 -> History(date, { date = it }, habits, done)
-                else -> Statistics(habits, allLogs)
+                2 -> Statistics(habits, allLogs)
+                else -> ProgressHub(habits, allLogs, logs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
             }
         }
     }
     if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category ->
         scope.launch {
-            val habit = HabitEntity(id = editing?.id ?: 0, title = title.trim(), note = note.trim(), category = category.trim().ifBlank { "عمومی" }, createdAt = editing?.createdAt ?: System.currentTimeMillis())
+            val habit = HabitEntity(
+                id = editing?.id ?: 0, title = title.trim(), note = note.trim(),
+                category = category.trim().ifBlank { "عمومی" },
+                createdAt = editing?.createdAt ?: System.currentTimeMillis(),
+                scheduledDays = editing?.scheduledDays ?: "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY",
+                reminderTime = editing?.reminderTime ?: "08:00", isEnabled = editing?.isEnabled ?: true
+            )
             if (editing == null) dao.insertHabit(habit) else dao.updateHabit(habit)
         }
         editorOpen = false
@@ -262,7 +272,7 @@ private fun HabitCard(h: HabitEntity, completed: Boolean, toggle: () -> Unit, ed
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).clickable(onClick = toggle)) {
             Text(h.title, color = if (completed) Muted else White, fontWeight = FontWeight.SemiBold, textDecoration = if (completed) TextDecoration.LineThrough else TextDecoration.None)
-            Text(listOf(h.category, h.note).filter { it.isNotBlank() }.joinToString(" • "), color = Muted, fontSize = 11.sp, maxLines = 2)
+            Text(listOf(h.category, h.note, h.reminderTime).filter { it.isNotBlank() }.joinToString(" • "), color = Muted, fontSize = 11.sp, maxLines = 2)
         }
         Box {
             TextButton(onClick = { menu = true }) { Text("•••", color = Muted) }
@@ -325,8 +335,113 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
             Text("جمع‌بندی", color = White, fontWeight = FontWeight.Bold)
             Text("تعداد عادت‌ها: ${habits.size}", color = Muted, fontSize = 13.sp)
             Text("ثبت‌های موفق در این هفته: $completed", color = Muted, fontSize = 13.sp)
+            val monthStart = today.withDayOfMonth(1)
+            val monthlyCount = logs.count { it.isCompleted && runCatching { val d = LocalDate.parse(it.date); !d.isBefore(monthStart) && !d.isAfter(today) }.getOrDefault(false) }
+            Text("ثبت‌های موفق این ماه: $monthlyCount", color = Muted, fontSize = 13.sp)
             if (habits.isEmpty()) Text("برای شروع آمار، یک عادت اضافه کن.", color = Violet, fontSize = 12.sp)
         } }
+    }
+}
+
+
+@Composable
+private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
+    val completedLogs = allLogs.filter { it.isCompleted }
+    val xp = completedLogs.size * 10
+    val level = xp / 100 + 1
+    val xpInLevel = xp % 100
+    val activeCount = habits.count { it.isEnabled }
+    val todayDone = todayLogs.count { it.isCompleted && habits.any { h -> h.id == it.habitId && h.isEnabled } }
+    val challengeTarget = minOf(3, activeCount)
+    val challengeProgress = if (challengeTarget == 0) 0f else (todayDone.toFloat() / challengeTarget).coerceIn(0f, 1f)
+    val milestones = listOf(1 to "اولین جرقه", 10 to "ده قدم", 30 to "پیوستگی", 100 to "صد ثبت موفق")
+    val recentStart = LocalDate.now().minusDays(6)
+    val previousStart = LocalDate.now().minusDays(13)
+    val weekDone = completedLogs.count { runCatching { val d = LocalDate.parse(it.date); d >= recentStart && d <= LocalDate.now() }.getOrDefault(false) }
+    val previousWeek = completedLogs.count { runCatching { val d = LocalDate.parse(it.date); d >= previousStart && d < recentStart }.getOrDefault(false) }
+    val insight = when {
+        completedLogs.isEmpty() -> "هنوز داده‌ی کافی برای تحلیل وجود ندارد. چند عادت را ثبت کن تا الگوها قابل بررسی شوند."
+        weekDone > previousWeek -> "ثبت‌های موفق این هفته نسبت به هفت روز قبل بیشتر بوده است. همین روند را حفظ کن."
+        weekDone < previousWeek -> "ثبت‌های موفق این هفته کمتر از هفته‌ی قبل است. هدف روزانه را کوچک‌تر و قابل انجام‌تر کن."
+        else -> "فعالیت این هفته تقریباً هم‌سطح هفته‌ی قبل است. تداوم را حفظ کن."
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(Color(0xFF251744), Panel, Color(0xFF111020)))).padding(20.dp)) {
+                Text("SPARK LEVEL", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("سطح $level", color = White, fontSize = 27.sp, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.width(10.dp))
+                    Text("$xp XP", color = Cyan, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(12.dp))
+                Box(Modifier.fillMaxWidth().height(9.dp).clip(CircleShape).background(PanelAlt)) {
+                    Box(Modifier.fillMaxWidth(xpInLevel / 100f).fillMaxHeight().clip(CircleShape).background(Brush.horizontalGradient(listOf(Violet, Cyan))))
+                }
+                Text("$xpInLevel از ۱۰۰ XP تا سطح بعدی", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                Text("هر ثبت موفق عادت = ۱۰ XP. امتیازها از سوابق ذخیره‌شده محاسبه می‌شوند.", color = Muted, fontSize = 10.sp)
+            }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
+                Text("چالش امروز", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(if (challengeTarget == 0) "برای شروع، یک عادت فعال بساز." else "انجام $challengeTarget عادت امروز", color = Muted, fontSize = 12.sp)
+                Spacer(Modifier.height(10.dp))
+                LinearProgressIndicator(progress = { challengeProgress }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color = Cyan, trackColor = PanelAlt)
+                Text(if (challengeTarget == 0) "بدون عادت فعال" else "$todayDone از $challengeTarget", color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
+                Text("دستاوردها", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                milestones.forEach { (required, name) ->
+                    val unlocked = completedLogs.size >= required
+                    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (unlocked) Icons.Default.EmojiEvents else Icons.Default.Lock, null, tint = if (unlocked) Cyan else Muted)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(name, color = if (unlocked) White else Muted, fontWeight = FontWeight.SemiBold)
+                            Text("$required ثبت موفق موردنیاز", color = Muted, fontSize = 10.sp)
+                        }
+                        Text(if (unlocked) "باز شد" else "${completedLogs.size}/$required", color = if (unlocked) Cyan else Muted, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
+                Text("بینش هوشمند", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Spacer(Modifier.height(7.dp))
+                Text(insight, color = Muted, fontSize = 13.sp)
+                Text("مبنای تحلیل: $weekDone ثبت این هفته، $previousWeek ثبت در هفته‌ی قبل", color = Cyan, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("ظاهر برنامه", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text("تم", color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    listOf("neon" to "نئون", "dark" to "تیره", "minimal" to "مینیمال").forEach { (key, label) ->
+                        FilterChip(selected = settings.theme == key, onClick = { onSettingsChange(settings.copy(theme = key)) }, label = { Text(label) })
+                    }
+                }
+                Text("رنگ تأکیدی", color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    listOf("violet" to "بنفش", "cyan" to "فیروزه‌ای", "lime" to "سبز", "pink" to "صورتی").forEach { (key, label) ->
+                        FilterChip(selected = settings.accent == key, onClick = { onSettingsChange(settings.copy(accent = key)) }, label = { Text(label) })
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("کاهش انیمیشن‌ها", color = White)
+                        Text("برای حرکت کمتر و مصرف پایین‌تر", color = Muted, fontSize = 10.sp)
+                    }
+                    Switch(checked = settings.reducedMotion, onCheckedChange = { onSettingsChange(settings.copy(reducedMotion = it)) })
+                }
+            }
+        }
     }
 }
 
