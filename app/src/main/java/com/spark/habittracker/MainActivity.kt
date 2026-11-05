@@ -61,15 +61,6 @@ private val Cyan: Color @Composable get() = LocalSparkPalette.current.secondary
 private val Muted: Color @Composable get() = LocalSparkPalette.current.muted
 private val White: Color @Composable get() = LocalSparkPalette.current.foreground
 
-internal fun calculateCompletionRate(completedCount: Int, totalCount: Int): Float {
-    if (totalCount <= 0) return 0f
-    return completedCount.coerceIn(0, totalCount).toFloat() / totalCount.toFloat()
-}
-
-internal fun calculateExperience(completedLogCount: Int): Int = completedLogCount.coerceAtLeast(0) * 10
-
-internal fun calculateLevel(experience: Int): Int = experience.coerceAtLeast(0) / 100 + 1
-
 @Entity(tableName = "habits")
 data class HabitEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
