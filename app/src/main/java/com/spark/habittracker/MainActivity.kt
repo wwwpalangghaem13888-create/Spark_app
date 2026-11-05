@@ -61,6 +61,15 @@ private val Cyan: Color @Composable get() = LocalSparkPalette.current.secondary
 private val Muted: Color @Composable get() = LocalSparkPalette.current.muted
 private val White: Color @Composable get() = LocalSparkPalette.current.foreground
 
+internal fun calculateCompletionRate(completedCount: Int, totalCount: Int): Float {
+    if (totalCount <= 0) return 0f
+    return completedCount.coerceIn(0, totalCount).toFloat() / totalCount.toFloat()
+}
+
+internal fun calculateExperience(completedLogCount: Int): Int = completedLogCount.coerceAtLeast(0) * 10
+
+internal fun calculateLevel(experience: Int): Int = experience.coerceAtLeast(0) / 100 + 1
+
 @Entity(tableName = "habits")
 data class HabitEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -180,7 +189,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
     val validHabitIds = habits.map { it.id }.toSet()
     val completedCount = done.intersect(validHabitIds).size
-    val progress = if (validHabitIds.isEmpty()) 0f else (completedCount.toFloat() / validHabitIds.size).coerceIn(0f, 1f)
+    val progress = calculateCompletionRate(completedCount, validHabitIds.size)
     Scaffold(containerColor = Ink,
         topBar = { TopAppBar(title = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
@@ -375,8 +384,8 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
 @Composable
 private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
     val completedLogs = allLogs.filter { it.isCompleted }
-    val xp = completedLogs.size * 10
-    val level = xp / 100 + 1
+    val xp = calculateExperience(completedLogs.size)
+    val level = calculateLevel(xp)
     val xpInLevel = xp % 100
     val activeCount = habits.count { it.isEnabled }
     val todayDone = todayLogs.count { it.isCompleted && habits.any { h -> h.id == it.habitId && h.isEnabled } }
