@@ -1,20 +1,9 @@
 package com.spark.habittracker
-
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,624 +20,234 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.glance.GlanceId
-import androidx.glance.GlanceModifier
-import androidx.glance.action.clickable
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.action.ActionParameters
-import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.provideContent
-import androidx.glance.background
-import androidx.glance.layout.*
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.room.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.viewmodel.dsl.viewModel
-import org.koin.core.context.startKoin
-import org.koin.dsl.module
-import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-class RoomConverters {
-    @TypeConverter
-    fun fromDayOfWeekList(value: List<DayOfWeek>): String =
-        value.joinToString(",") { it.name }
+private val Ink = Color(0xFF101318)
+private val Panel = Color(0xFF1B2028)
+private val PanelAlt = Color(0xFF29313B)
+private val Lime = Color(0xFFC7F36B)
+private val Cyan = Color(0xFF72DDE0)
+private val Muted = Color(0xFF9AA5B1)
+private val White = Color(0xFFF4F6F8)
 
-    @TypeConverter
-    fun toDayOfWeekList(value: String): List<DayOfWeek> =
-        if (value.isEmpty()) emptyList() else value.split(",").map { DayOfWeek.valueOf(it) }
-}
+@Entity(tableName = "habits")
+data class HabitEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val title: String, val note: String, val category: String, val createdAt: Long = System.currentTimeMillis())
 
-@Entity(tableName = "tasks")
-data class TaskEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val title: String,
-    val description: String,
-    val scheduledDays: List<DayOfWeek>,
-    val reminderTime: String,
-    val category: String,
-    val isEnabled: Boolean = true
-)
-
-@Entity(tableName = "task_logs", indices = [Index(value = ["taskId", "date"], unique = true)])
-data class TaskLogEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val taskId: Long,
-    val date: String,
-    val isCompleted: Boolean,
-    val completionTimestamp: Long = System.currentTimeMillis()
-)
-
-data class TaskWithStatus(
-    val task: TaskEntity,
-    val isCompletedToday: Boolean
-)
+@Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "date"], unique = true)], foreignKeys = [ForeignKey(entity = HabitEntity::class, parentColumns = ["id"], childColumns = ["habitId"], onDelete = ForeignKey.CASCADE)])
+data class HabitLogEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val habitId: Long, val date: String, val isCompleted: Boolean)
 
 @Dao
-interface TaskDao {
-    @Query("SELECT * FROM tasks WHERE isEnabled = 1")
-    fun getAllTasks(): Flow<List<TaskEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTask(task: TaskEntity): Long
-
-    @Query("SELECT * FROM task_logs WHERE date = :date")
-    fun getLogsForDate(date: String): Flow<List<TaskLogEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrUpdateLog(log: TaskLogEntity)
-
-    @Query("SELECT COUNT(*) FROM task_logs WHERE date = :date AND isCompleted = 1")
-    fun getCompletedCountForDate(date: String): Flow<Int>
+interface HabitDao {
+    @Query("SELECT * FROM habits ORDER BY createdAt DESC") fun observeHabits(): Flow<List<HabitEntity>>
+    @Query("SELECT * FROM habit_logs WHERE date = :date") fun observeLogs(date: String): Flow<List<HabitLogEntity>>
+    @Query("SELECT * FROM habit_logs") fun observeAllLogs(): Flow<List<HabitLogEntity>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveHabit(habit: HabitEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveLog(log: HabitLogEntity)
+    @Query("DELETE FROM habit_logs WHERE habitId = :id") suspend fun deleteLogs(id: Long)
+    @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
 }
 
-@Database(entities = [TaskEntity::class, TaskLogEntity::class], version = 1, exportSchema = false)
-@TypeConverters(RoomConverters::class)
-abstract class SparkDatabase : RoomDatabase() {
-    abstract fun taskDao(): TaskDao
-}
-
-class TaskRepository(private val taskDao: TaskDao) {
-    val todayDateStr: String get() = LocalDate.now().toString()
-
-    fun getTodayTasksWithStatus(): Flow<List<TaskWithStatus>> {
-        val todayOfWeek = LocalDate.now().dayOfWeek
-        return combine(taskDao.getAllTasks(), taskDao.getLogsForDate(todayDateStr)) { tasks, logs ->
-            tasks.filter { it.scheduledDays.contains(todayOfWeek) }
-                .map { task ->
-                    val isDone = logs.find { it.taskId == task.id }?.isCompleted ?: false
-                    TaskWithStatus(task, isDone)
-                }
-        }
-    }
-
-    suspend fun toggleTaskCompletion(taskId: Long, currentStatus: Boolean) {
-        val newLog = TaskLogEntity(
-            taskId = taskId,
-            date = todayDateStr,
-            isCompleted = !currentStatus
-        )
-        taskDao.insertOrUpdateLog(newLog)
-    }
-
-    suspend fun addTask(task: TaskEntity) {
-        taskDao.insertTask(task)
-    }
-}
-
-class DashboardViewModel(private val repository: TaskRepository) : ViewModel() {
-    val todayTasks: StateFlow<List<TaskWithStatus>> =
-        repository.getTodayTasksWithStatus()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val completionPercentage: StateFlow<Float> = todayTasks.map { list ->
-        if (list.isEmpty()) 0f else (list.count { it.isCompletedToday }.toFloat() / list.size.toFloat())
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.75f)
-
-    fun onTaskCheckedChange(taskWithStatus: TaskWithStatus) {
-        viewModelScope.launch {
-            repository.toggleTaskCompletion(
-                taskWithStatus.task.id,
-                taskWithStatus.isCompletedToday
-            )
-        }
-    }
-
-    fun addNewTask(title: String, desc: String, category: String, time: String) {
-        viewModelScope.launch {
-            repository.addTask(
-                TaskEntity(
-                    title = title,
-                    description = desc,
-                    scheduledDays = DayOfWeek.values().toList(),
-                    reminderTime = time,
-                    category = category
-                )
-            )
-        }
-    }
-}
-
-val appModule = module {
-    single {
-        Room.databaseBuilder(get(), SparkDatabase::class.java, "spark_tracker.db")
-            .fallbackToDestructiveMigration()
-            .build()
-    }
-    single { get<SparkDatabase>().taskDao() }
-    single { TaskRepository(get()) }
-    viewModel { DashboardViewModel(get()) }
-}
-
-val DarkBackground = Color(0xFF121318)
-val DarkSurface = Color(0xFF1C1E24)
-val DarkSurfaceBorder = Color(0xFF252525)
-val NeonLime = Color(0xFFC3F400)
-val NeonCyan = Color(0xFF00FBFB)
-val TextWhite = Color(0xFFFFFFFF)
-val TextMuted = Color(0xFF9E9E9E)
-
-@Composable
-fun SparkTheme(content: @Composable () -> Unit) {
-    val colorScheme = darkColorScheme(
-        background = DarkBackground,
-        surface = DarkSurface,
-        primary = NeonLime,
-        secondary = NeonCyan,
-        onBackground = TextWhite,
-        onSurface = TextWhite
-    )
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            content = content
-        )
-    }
-}
+@Database(entities = [HabitEntity::class, HabitLogEntity::class], version = 1, exportSchema = false)
+abstract class SparkDatabase : RoomDatabase() { abstract fun habitDao(): HabitDao }
 
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        startKoin {
-            androidContext(this@MainActivity)
-            modules(appModule)
-        }
-        createNotificationChannel(this)
-        setContent {
-            SparkTheme {
-                MainAppScreen()
-            }
-        }
-    }
+    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_habits.db").build() }
+    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { SparkTheme { SparkApp(db.habitDao(), db) } } }
+}
+
+@Composable
+private fun SparkTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = darkColorScheme(primary = Lime, secondary = Cyan, background = Ink, surface = Panel, onPrimary = Ink, onBackground = White, onSurface = White), content = content)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen() {
-    var selectedTab by remember { mutableStateOf(0) }
-    var showAddTaskDialog by remember { mutableStateOf(false) }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground),
-                title = {
-                    Text(
-                        text = "داشبورد SPARK",
-                        color = NeonLime,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                },
-                navigationIcon = {
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp)
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(DarkSurfaceBorder),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Person, contentDescription = "Profile", tint = TextWhite)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = TextWhite)
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = DarkSurface,
-                tonalElevation = 8.dp
-            ) {
-                val items = listOf("داشبورد" to Icons.Default.Home, "تقویم" to Icons.Default.DateRange, "آمار" to Icons.Default.BarChart)
-                items.forEachIndexed { index, pair ->
-                    val isSelected = selectedTab == index
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { selectedTab = index },
-                        icon = {
-                            Icon(
-                                pair.second,
-                                contentDescription = pair.first,
-                                tint = if (isSelected) NeonCyan else TextMuted
-                            )
-                        },
-                        label = {
-                            Text(
-                                pair.first,
-                                color = if (isSelected) NeonCyan else TextMuted,
-                                fontSize = 11.sp
-                            )
-                        }
-                    )
-                }
+private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
+    var tab by remember { mutableIntStateOf(0) }
+    var date by remember { mutableStateOf(LocalDate.now()) }
+    var editorOpen by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<HabitEntity?>(null) }
+    val habits by dao.observeHabits().collectAsState(initial = emptyList())
+    val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
+    val allLogs by dao.observeAllLogs().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
+    val progress = if (habits.isEmpty()) 0f else done.intersect(habits.map { it.id }.toSet()).size.toFloat() / habits.size
+    Scaffold(containerColor = Ink,
+        topBar = { TopAppBar(title = { Column {
+            Text("SPARK", color = Lime, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+            Text(listOf("عادت‌های روزانه", "مرور روزها", "گزارش عملکرد")[tab], color = Muted, fontSize = 12.sp)
+        } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
+        bottomBar = { NavigationBar(containerColor = Panel) {
+            listOf("خانه" to Icons.Default.Home, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights).forEachIndexed { i, item ->
+                NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
+                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Lime, selectedTextColor = Lime, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddTaskDialog = true },
-                containerColor = NeonLime,
-                contentColor = Color.Black,
-                shape = CircleShape
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Task", modifier = Modifier.size(28.dp))
+        } },
+        floatingActionButton = { if (tab == 0) FloatingActionButton(onClick = { editing = null; editorOpen = true }, containerColor = Lime, contentColor = Ink) { Icon(Icons.Default.Add, "افزودن عادت") } }
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (tab) {
+                0 -> Dashboard(habits, done, progress,
+                    onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
+                    onEdit = { editing = it; editorOpen = true },
+                    onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
+                1 -> History(date, { date = it }, habits, done)
+                else -> Statistics(habits, allLogs)
             }
         }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(DarkBackground)
-                .padding(paddingValues)
-        ) {
-            when (selectedTab) {
-                0 -> DashboardContent()
-                1 -> CalendarScreen()
-                2 -> StatisticsScreen()
-            }
-            if (showAddTaskDialog) {
-                AddTaskDialog(onDismiss = { showAddTaskDialog = false })
-            }
-        }
+    }
+    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category ->
+        scope.launch { dao.saveHabit(HabitEntity(id = editing?.id ?: 0, title = title.trim(), note = note.trim(), category = category.trim().ifBlank { "عمومی" }, createdAt = editing?.createdAt ?: System.currentTimeMillis())) }
+        editorOpen = false
     }
 }
 
 @Composable
-fun DashboardContent(viewModel: DashboardViewModel = org.koin.androidx.compose.koinViewModel()) {
-    val tasks by viewModel.todayTasks.collectAsState()
-    val progressPercent by viewModel.completionPercentage.collectAsState()
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item { Spacer(modifier = Modifier.height(8.dp)) }
+private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(DarkSurface)
-                    .padding(20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(100.dp)
-                ) {
-                    val animatedProgress by animateFloatAsState(
-                        targetValue = progressPercent,
-                        animationSpec = tween(1000)
-                    )
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(
-                            color = DarkSurfaceBorder,
-                            style = Stroke(width = 10.dp.toPx())
-                        )
-                        drawArc(
-                            color = NeonLime,
-                            startAngle = -90f,
-                            sweepAngle = 360f * animatedProgress,
-                            useCenter = false,
-                            style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
-                        )
-                    }
-                    Text(
-                        text = "${(progressPercent * 100).toInt()}%",
-                        color = TextWhite,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Panel).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(104.dp), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize()) { drawCircle(PanelAlt, style = Stroke(10.dp.toPx())); drawArc(Lime, -90f, 360f * progress, false, style = Stroke(10.dp.toPx(), cap = StrokeCap.Round)) }
+                    Text("\${(progress * 100).toInt()}٪", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(modifier = Modifier.width(20.dp))
-                Column {
-                    Text(
-                        text = "پیشرفت امروز شما",
-                        color = TextWhite,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "عملکرد بسیار عالی تا این لحظه!",
-                        color = TextMuted,
-                        fontSize = 12.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(NeonLime.copy(alpha = 0.15f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "+۱۲٪ نسبت به دیروز",
-                            color = NeonLime,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                Spacer(Modifier.width(18.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("پیشرفت امروز", color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(if (habits.isEmpty()) "اولین عادتت را اضافه کن." else "\${done.size} از \${habits.size} عادت انجام شده", color = Muted, fontSize = 13.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (progress >= 1f && habits.isNotEmpty()) "همه کارها انجام شد!" else "پیوستگی مهم‌تر از کمال‌گرایی است.", color = Lime, fontSize = 11.sp)
                 }
             }
         }
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, NeonCyan, RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    MetricColumn("زمان فعال", "۲.۵ ساعت")
-                    MetricColumn("وظایف انجام شده", "${tasks.count { it.isCompletedToday }}/${tasks.size}")
-                    MetricColumn("بازده", "۸۵٪")
-                }
-            }
-        }
-        item {
-            Text(
-                text = "وظایف امروز",
-                color = TextWhite,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
-        if (tasks.isEmpty()) {
-            item {
-                Text(
-                    text = "هیچ وظیفه‌ای برای امروز برنامه‌ریزی نشده است.",
-                    color = TextMuted,
-                    fontSize = 13.sp
-                )
-            }
-        } else {
-            items(tasks, key = { it.task.id }) { item ->
-                TaskItemRow(
-                    taskWithStatus = item,
-                    onCheckedChange = { viewModel.onTaskCheckedChange(item) }
-                )
-            }
-        }
-        item { Spacer(modifier = Modifier.height(80.dp)) }
+        item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Metric("کل عادت‌ها", habits.size.toString(), Modifier.weight(1f))
+            Metric("انجام‌شده", done.size.toString(), Modifier.weight(1f))
+            Metric("باقی‌مانده", (habits.size - done.size).coerceAtLeast(0).toString(), Modifier.weight(1f))
+        } }
+        item { Text("فهرست امروز", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        if (habits.isEmpty()) item { EmptyState() } else items(habits, key = { it.id }) { h -> HabitCard(h, h.id in done, { onToggle(h, h.id in done) }, { onEdit(h) }, { onDelete(h) }) }
     }
 }
 
 @Composable
-fun MetricColumn(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, color = TextMuted, fontSize = 11.sp)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = value, color = NeonCyan, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+private fun Metric(label: String, value: String, modifier: Modifier) {
+    Column(modifier.clip(RoundedCornerShape(16.dp)).background(Panel).padding(13.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = Cyan, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(label, color = Muted, fontSize = 11.sp)
     }
 }
 
 @Composable
-fun TaskItemRow(
-    taskWithStatus: TaskWithStatus,
-    onCheckedChange: () -> Unit
-) {
-    val isCompleted = taskWithStatus.isCompletedToday
-    val borderColor by animateColorAsState(if (isCompleted) NeonLime else DarkSurfaceBorder)
+private fun EmptyState() {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Default.CheckCircle, null, tint = Lime, modifier = Modifier.size(34.dp))
+        Text("هنوز عادتی ثبت نشده", color = White, fontWeight = FontWeight.Bold)
+        Text("با دکمه + اولین عادتت را بساز.", color = Muted, fontSize = 12.sp)
+    }
+}
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-            .clickable { onCheckedChange() },
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(if (isCompleted) NeonLime else Color.Transparent)
-                    .border(2.dp, if (isCompleted) NeonLime else TextMuted, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isCompleted) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = "Done",
-                        tint = Color.Black,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = taskWithStatus.task.title,
-                    color = if (isCompleted) TextMuted else TextWhite,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
-                )
-                Text(
-                    text = "${taskWithStatus.task.category} • ${taskWithStatus.task.reminderTime}",
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
+@Composable
+private fun HabitCard(h: HabitEntity, completed: Boolean, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(if (completed) Lime else Color.Transparent).clickable(onClick = toggle), contentAlignment = Alignment.Center) {
+            if (completed) Icon(Icons.Default.Check, null, tint = Ink) else Canvas(Modifier.fillMaxSize()) { drawCircle(Muted, style = Stroke(1.5.dp.toPx())) }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).clickable(onClick = toggle)) {
+            Text(h.title, color = if (completed) Muted else White, fontWeight = FontWeight.SemiBold, textDecoration = if (completed) TextDecoration.LineThrough else TextDecoration.None)
+            Text(listOf(h.category, h.note).filter { it.isNotBlank() }.joinToString(" • "), color = Muted, fontSize = 11.sp, maxLines = 2)
+        }
+        Box {
+            TextButton(onClick = { menu = true }) { Text("•••", color = Muted) }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("ویرایش") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; edit() })
+                DropdownMenuItem(text = { Text("حذف") }, leadingIcon = { Icon(Icons.Default.Delete, null) }, onClick = { menu = false; delete() })
             }
         }
     }
 }
 
 @Composable
-fun CalendarScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("نمای تقویم ماهانه و سالانه", color = TextWhite)
-    }
-}
-
-@Composable
-fun StatisticsScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("نمودارهای پیشرفته و آمار عملکرد", color = TextWhite)
-    }
-}
-
-@Composable
-fun AddTaskDialog(
-    onDismiss: () -> Unit,
-    viewModel: DashboardViewModel = org.koin.androidx.compose.koinViewModel()
-) {
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("عمومی") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = DarkSurface,
-        title = { Text("افزودن عادت جدید", color = TextWhite) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("عنوان وظیفه") },
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonLime)
-                )
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("دسته بندی") },
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonLime)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                if (title.isNotEmpty()) {
-                    viewModel.addNewTask(title, "", category, "08:00")
-                    onDismiss()
+private fun History(date: LocalDate, changeDate: (LocalDate) -> Unit, habits: List<HabitEntity>, done: Set<Long>) {
+    val formatter = remember { DateTimeFormatter.ofPattern("EEEE، d MMMM", Locale("fa")) }
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            IconButton(onClick = { changeDate(date.minusDays(1)) }) { Icon(Icons.Default.ChevronRight, "روز قبل", tint = White) }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(date.format(formatter), color = White, fontWeight = FontWeight.Bold); Text(date.toString(), color = Muted, fontSize = 11.sp) }
+            IconButton(onClick = { if (date.isBefore(LocalDate.now())) changeDate(date.plusDays(1)) }) { Icon(Icons.Default.ChevronLeft, "روز بعد", tint = if (date.isBefore(LocalDate.now())) White else Muted) }
+        }
+        Text("\${done.size} از \${habits.size} عادت انجام شده", color = Lime, fontWeight = FontWeight.Bold)
+        if (habits.isEmpty()) EmptyState() else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            items(habits, key = { it.id }) { h ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (h.id in done) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = if (h.id in done) Lime else Muted)
+                    Spacer(Modifier.width(12.dp)); Text(h.title, color = White, modifier = Modifier.weight(1f))
+                    Text(if (h.id in done) "انجام شد" else "ثبت نشده", color = Muted, fontSize = 11.sp)
                 }
-            }) {
-                Text("ذخیره", color = NeonLime)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("انصراف", color = TextMuted)
-            }
-        }
-    )
-}
-
-class SparkWidget : GlanceAppWidget() {
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        provideContent {
-            GlanceContent()
-        }
-    }
-
-    @Composable
-    private fun GlanceContent() {
-        Column(
-            modifier = GlanceModifier
-                .fillMaxSize()
-                .background(DarkSurface)
-                .padding(12.dp)
-        ) {
-            Text(
-                "SPARK وظایف امروز",
-                style = TextStyle(color = androidx.glance.unit.ColorProvider(NeonLime))
-            )
-            Spacer(modifier = GlanceModifier.height(8.dp))
-            Row(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clickable(actionRunCallback<ToggleWidgetTaskCallback>())
-            ) {
-                Text(
-                    "تمرین ورزش صبحگاهی ✓",
-                    style = TextStyle(color = androidx.glance.unit.ColorProvider(TextWhite))
-                )
             }
         }
     }
 }
 
-class ToggleWidgetTaskCallback : ActionCallback {
-    override suspend fun onAction(
-        context: Context,
-        glanceId: GlanceId,
-        parameters: ActionParameters
-    ) {
+@Composable
+private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
+    val today = LocalDate.now()
+    val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
+    val byDate = logs.filter { it.isCompleted }.groupBy { it.date }
+    val completed = days.sumOf { byDate[it.toString()]?.size ?: 0 }
+    val possible = habits.size * 7
+    val rate = if (possible == 0) 0 else (completed.toFloat() / possible * 100).toInt().coerceAtMost(100)
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(18.dp)) {
+            Text("عملکرد هفت روز اخیر", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text("$rate٪", color = Lime, fontSize = 32.sp, fontWeight = FontWeight.Black)
+            Text("نسبت ثبت‌های موفق به تعداد عادت‌ها در این هفته", color = Muted, fontSize = 11.sp)
+        } }
+        item { Text("روند روزانه", color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+        item { Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+            days.forEach { day ->
+                val count = byDate[day.toString()]?.size ?: 0
+                val ratio = if (habits.isEmpty()) 0f else (count.toFloat() / habits.size).coerceIn(0f, 1f)
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Box(Modifier.width(24.dp).height(100.dp), contentAlignment = Alignment.BottomCenter) { Box(Modifier.fillMaxWidth().fillMaxHeight(ratio).clip(RoundedCornerShape(8.dp)).background(Lime)) }
+                    Text(day.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale("fa")), color = Muted, fontSize = 10.sp)
+                }
+            }
+        } }
+        item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
+            Text("جمع‌بندی", color = White, fontWeight = FontWeight.Bold)
+            Text("تعداد عادت‌ها: \${habits.size}", color = Muted, fontSize = 13.sp)
+            Text("ثبت‌های موفق در این هفته: $completed", color = Muted, fontSize = 13.sp)
+            if (habits.isEmpty()) Text("برای شروع آمار، یک عادت اضافه کن.", color = Lime, fontSize = 12.sp)
+        } }
     }
 }
 
-class SparkWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = SparkWidget()
-}
-
-fun createNotificationChannel(context: Context) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            "SPARK_NOTIFS",
-            "یادآوری عادت‌ها",
-            NotificationManager.IMPORTANCE_HIGH
-        )
-        val manager = context.getSystemService(NotificationManager::class.java)
-        manager?.createNotificationChannel(channel)
-    }
-}
-
-class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
-        }
-    }
+@Composable
+private fun HabitEditor(initial: HabitEntity?, dismiss: () -> Unit, save: (String, String, String) -> Unit) {
+    var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
+    var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
+    var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
+    var error by remember { mutableStateOf(false) }
+    AlertDialog(onDismissRequest = dismiss, containerColor = Panel,
+        title = { Text(if (initial == null) "عادت جدید" else "ویرایش عادت", color = White) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            OutlinedTextField(title, { title = it; error = false }, label = { Text("عنوان عادت") }, singleLine = true)
+            OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
+            OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, minLines = 2)
+            if (error) Text("عنوان نمی‌تواند خالی باشد.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+        } },
+        confirmButton = { TextButton(onClick = { if (title.isBlank()) error = true else save(title, note, category) }) { Text("ذخیره", color = Lime) } },
+        dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } })
 }
