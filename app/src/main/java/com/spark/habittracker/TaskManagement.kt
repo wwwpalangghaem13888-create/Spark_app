@@ -54,10 +54,10 @@ interface TaskDao {
     suspend fun update(task: TaskEntity)
 
     @Query("UPDATE tasks SET completed = :completed, completedAt = :completedAt, updatedAt = :updatedAt WHERE id = :id AND archived = 0")
-    suspend fun setCompletion(id: Long, completed: Boolean, completedAt: Long?, updatedAt: Long = System.currentTimeMillis()): Int
+    suspend fun setCompletion(id: Long, completed: Boolean, completedAt: Long?, updatedAt: Long): Int
 
     @Query("UPDATE tasks SET archived = 1, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun archive(id: Long, updatedAt: Long = System.currentTimeMillis()): Int
+    suspend fun archive(id: Long, updatedAt: Long): Int
 
     @Query("DELETE FROM tasks WHERE id = :id")
     suspend fun deletePermanently(id: Long): Int
@@ -75,13 +75,13 @@ class TaskRepository(private val dao: TaskDao) {
             title = task.title.trim(),
             description = task.description.trim(),
             category = task.category.trim().ifBlank { "عمومی" },
-            tags = task.tags.split(",").map(String::trim).filter(String::isNotBlank)
+            tags = task.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 .distinct().joinToString(","),
             priority = task.priority.coerceIn(0, 3),
             updatedAt = System.currentTimeMillis()
         )
         require(normalized.title.isNotBlank()) { "Task title must not be blank." }
-        normalized.dueDate?.let(LocalDate::parse)
+        normalized.dueDate?.let { LocalDate.parse(it) }
         return if (normalized.id == 0L) dao.insert(normalized)
         else {
             dao.update(normalized)
@@ -93,12 +93,13 @@ class TaskRepository(private val dao: TaskDao) {
         dao.setCompletion(
             id = task.id,
             completed = completed,
-            completedAt = if (completed) System.currentTimeMillis() else null
+            completedAt = if (completed) System.currentTimeMillis() else null,
+            updatedAt = System.currentTimeMillis()
         )
     }
 
     suspend fun archive(taskId: Long) {
-        dao.archive(taskId)
+        dao.archive(taskId, System.currentTimeMillis())
     }
 
     suspend fun deletePermanently(taskId: Long) {
@@ -107,7 +108,7 @@ class TaskRepository(private val dao: TaskDao) {
 }
 
 internal fun taskIsOverdue(task: TaskEntity, today: LocalDate): Boolean =
-    !task.archived && !task.completed && task.dueDate?.let { LocalDate.parse(it).isBefore(today) } == true
+    !task.archived && !task.completed && task.dueDate?.let { runCatching { LocalDate.parse(it).isBefore(today) }.getOrDefault(false) } == true
 
 internal fun taskPriorityLabel(priority: Int): String = when (priority.coerceIn(0, 3)) {
     0 -> "کم"
