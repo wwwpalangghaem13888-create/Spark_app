@@ -371,7 +371,8 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
         log.isCompleted && eligibleHabits.any { habit ->
             habit.id == log.habitId && runCatching {
                 val day = LocalDate.parse(log.date)
-                !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
+                day in days &&
+                    !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
                     day.dayOfWeek.name in habit.scheduledDays.split(",")
             }.getOrDefault(false)
         }
@@ -392,7 +393,13 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
         item { Text("روند روزانه", color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
         item { Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             days.forEach { day ->
-                val count = byDate[day.toString()]?.size ?: 0
+                val count = byDate[day.toString()]?.count { log ->
+                    eligibleHabits.any { habit ->
+                        habit.id == log.habitId &&
+                            !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
+                            day.dayOfWeek.name in habit.scheduledDays.split(",")
+                    }
+                } ?: 0
                 val expected = eligibleHabits.count { habit ->
                     !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
                         day.dayOfWeek.name in habit.scheduledDays.split(",")
