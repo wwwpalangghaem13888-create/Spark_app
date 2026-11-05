@@ -171,6 +171,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     var editing by remember { mutableStateOf<HabitEntity?>(null) }
     val habits by dao.observeHabits().collectAsState(initial = emptyList())
     val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
+    val todayLogs by remember { dao.observeLogs(LocalDate.now().toString()) }.collectAsState(initial = emptyList())
     val allLogs by dao.observeAllLogs().collectAsState(initial = emptyList())
     val savedSettings by dao.observeSettings().collectAsState(initial = null)
     val settings = savedSettings ?: UserSettingsEntity()
@@ -198,13 +199,13 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                0 -> Dashboard(habits, done, progress,
+                0 -> Dashboard(habits, done, progress, settings.reducedMotion,
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
                 1 -> History(date, { date = it }, habits, done)
                 2 -> Statistics(habits, allLogs)
-                else -> ProgressHub(habits, allLogs, logs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
+                else -> ProgressHub(habits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
             }
         }
     }
@@ -224,10 +225,10 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
 }
 
 @Composable
-private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, reducedMotion: Boolean, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = if (reducedMotion) 0 else 1100, easing = FastOutSlowInEasing),
         label = "daily-progress"
     )
     val percentage = (animatedProgress * 100f).roundToInt().coerceIn(0, 100)
@@ -416,7 +417,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                 Spacer(Modifier.height(6.dp))
                 Text(if (challengeTarget == 0) "برای شروع، یک عادت فعال بساز." else "انجام $challengeTarget عادت امروز", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(10.dp))
-                LinearProgressIndicator(progress = { challengeProgress }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color = Cyan, trackColor = PanelAlt)
+                LinearProgressIndicator(progress = challengeProgress, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color = Cyan, trackColor = PanelAlt)
                 Text(if (challengeTarget == 0) "بدون عادت فعال" else "$todayDone از $challengeTarget", color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             }
         }
