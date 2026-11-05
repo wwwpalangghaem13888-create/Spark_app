@@ -2,6 +2,10 @@ package com.spark.habittracker
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -37,13 +44,14 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val Ink = Color(0xFF101318)
-private val Panel = Color(0xFF1B2028)
-private val PanelAlt = Color(0xFF29313B)
-private val Lime = Color(0xFFC7F36B)
+private val Ink = Color(0xFF090716)
+private val Panel = Color(0xFF151127)
+private val PanelAlt = Color(0xFF241A43)
+private val Violet = Color(0xFF8B45FF)
+private val VioletLight = Color(0xFFD6B8FF)
 private val Cyan = Color(0xFF72DDE0)
-private val Muted = Color(0xFF9AA5B1)
-private val White = Color(0xFFF4F6F8)
+private val Muted = Color(0xFFA9A0C2)
+private val White = Color(0xFFF8F5FF)
 
 @Entity(tableName = "habits")
 data class HabitEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val title: String, val note: String, val category: String, val createdAt: Long = System.currentTimeMillis())
@@ -116,11 +124,16 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val allLogs by dao.observeAllLogs().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
-    val progress = if (habits.isEmpty()) 0f else done.intersect(habits.map { it.id }.toSet()).size.toFloat() / habits.size
+    val validHabitIds = habits.map { it.id }.toSet()
+    val completedCount = done.intersect(validHabitIds).size
+    val progress = if (validHabitIds.isEmpty()) 0f else (completedCount.toFloat() / validHabitIds.size).coerceIn(0f, 1f)
     Scaffold(containerColor = Ink,
-        topBar = { TopAppBar(title = { Column {
-            Text("SPARK", color = Lime, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-            Text(listOf("عادت‌های روزانه", "مرور روزها", "گزارش عملکرد")[tab], color = Muted, fontSize = 12.sp)
+        topBar = { TopAppBar(title = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
+            Column {
+                Text("SPARK", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text(listOf("عادت‌های روزانه", "مرور روزها", "گزارش عملکرد")[tab], color = Muted, fontSize = 12.sp)
+            }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
             listOf("خانه" to Icons.Default.Home, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights).forEachIndexed { i, item ->
@@ -152,26 +165,46 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
 
 @Composable
 private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+        label = "daily-progress"
+    )
+    val percentage = (animatedProgress * 100f).roundToInt().coerceIn(0, 100)
+    val completedCount = done.intersect(habits.map { it.id }.toSet()).size
+    LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Ink, Color(0xFF130D27), Ink))), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Panel).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(104.dp), contentAlignment = Alignment.Center) {
-                    Canvas(Modifier.fillMaxSize()) { drawCircle(PanelAlt, style = Stroke(10.dp.toPx())); drawArc(Lime, -90f, 360f * progress, false, style = Stroke(10.dp.toPx(), cap = StrokeCap.Round)) }
-                    Text("\${(progress * 100).toInt()}٪", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(listOf(Color(0xFF241644), Panel, Color(0xFF17112D)))).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawCircle(Color(0xFF34235A), style = Stroke(10.dp.toPx()))
+                        drawArc(
+                            brush = Brush.sweepGradient(listOf(VioletLight, Violet, Color(0xFF5420C5), VioletLight)),
+                            startAngle = -90f,
+                            sweepAngle = 360f * animatedProgress,
+                            useCenter = false,
+                            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                        drawCircle(Color(0x558B45FF), radius = size.minDimension * 0.34f)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("$percentage٪", color = White, fontSize = 25.sp, fontWeight = FontWeight.Black)
+                        Text("امروز", color = Muted, fontSize = 10.sp)
+                    }
                 }
                 Spacer(Modifier.width(18.dp))
                 Column(Modifier.weight(1f)) {
                     Text("پیشرفت امروز", color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(if (habits.isEmpty()) "اولین عادتت را اضافه کن." else "\${done.size} از \${habits.size} عادت انجام شده", color = Muted, fontSize = 13.sp)
-                    Spacer(Modifier.height(8.dp))
-                    Text(if (progress >= 1f && habits.isNotEmpty()) "همه کارها انجام شد!" else "پیوستگی مهم‌تر از کمال‌گرایی است.", color = Lime, fontSize = 11.sp)
+                    Text(if (habits.isEmpty()) "اولین عادتت را اضافه کن." else "$completedCount از ${habits.size} عادت انجام شده", color = Muted, fontSize = 13.sp)
+                    Spacer(Modifier.height(9.dp))
+                    Text(if (habits.isNotEmpty() && completedCount == habits.size) "همه کارها انجام شد!" else "قدم‌های کوچک، تغییرهای بزرگ.", color = VioletLight, fontSize = 11.sp)
                 }
             }
         }
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Metric("کل عادت‌ها", habits.size.toString(), Modifier.weight(1f))
-            Metric("انجام‌شده", done.size.toString(), Modifier.weight(1f))
-            Metric("باقی‌مانده", (habits.size - done.size).coerceAtLeast(0).toString(), Modifier.weight(1f))
+            Metric("انجام‌شده", completedCount.toString(), Modifier.weight(1f))
+            Metric("باقی‌مانده", (habits.size - completedCount).coerceAtLeast(0).toString(), Modifier.weight(1f))
         } }
         item { Text("فهرست امروز", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         if (habits.isEmpty()) item { EmptyState() } else items(habits, key = { it.id }) { h -> HabitCard(h, h.id in done, { onToggle(h, h.id in done) }, { onEdit(h) }, { onDelete(h) }) }
