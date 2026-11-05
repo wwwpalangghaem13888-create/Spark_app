@@ -69,13 +69,13 @@ fun SparkCalendarScreen(
     val dates = when (mode) {
         CalendarMode.DAY -> listOf(selectedDate)
         CalendarMode.WEEK -> {
-            val start = selectedDate.minusDays((selectedDate.dayOfWeek.value - 1).toLong())
+            val start = selectedDate.minusDays(((selectedDate.dayOfWeek.value + 1) % 7).toLong())
             (0L..6L).map(start::plusDays)
         }
         CalendarMode.MONTH -> {
             val month = YearMonth.from(selectedDate)
             val first = month.atDay(1)
-            val offset = first.dayOfWeek.value - 1
+            val offset = (first.dayOfWeek.value + 1) % 7
             buildList<LocalDate?> {
                 repeat(offset) { add(null) }
                 (1..month.lengthOfMonth()).forEach { add(month.atDay(it)) }
@@ -120,7 +120,7 @@ fun SparkCalendarScreen(
         }
         if (mode != CalendarMode.DAY) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                listOf("د", "س", "چ", "پ", "ج", "ش", "ی").forEach {
+                listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEach {
                     Text(it, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
                 }
             }
