@@ -233,7 +233,15 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(savedSettings) { if (savedSettings == null) dao.saveSettings(UserSettingsEntity()) }
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
-    val validHabitIds = habits.map { it.id }.toSet()
+    val streaksByHabit = remember(habits, allLogs) {
+        habits.associate { habit ->
+            val completedDates = allLogs.asSequence()
+                .filter { it.habitId == habit.id && it.isCompleted }
+                .mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+                .toSet()
+            habit.id to calculateHabitStreak(habit, completedDates, LocalDate.now())
+        }
+    }
     val scheduledHabits = habits.filter { habit ->
         habit.isEnabled &&
             !date.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
@@ -264,7 +272,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                0 -> Dashboard(scheduledHabits, done, progress, settings.reducedMotion,
+                0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion,
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
@@ -322,7 +330,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
 }
 
 @Composable
-private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, reducedMotion: Boolean, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, streaks: Map<Long, Int>, reducedMotion: Boolean, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
         animationSpec = tween(durationMillis = if (reducedMotion) 0 else 1100, easing = FastOutSlowInEasing),
@@ -366,7 +374,7 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
             Metric("باقی‌مانده", (habits.size - completedCount).coerceAtLeast(0).toString(), Modifier.weight(1f))
         } }
         item { Text("فهرست امروز", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
-        if (habits.isEmpty()) item { EmptyState() } else items(habits, key = { it.id }) { h -> HabitCard(h, h.id in done, { onToggle(h, h.id in done) }, { onEdit(h) }, { onDelete(h) }) }
+        if (habits.isEmpty()) item { EmptyState() } else items(habits, key = { it.id }) { h -> HabitCard(h, h.id in done, streaks[h.id] ?: 0, { onToggle(h, h.id in done) }, { onEdit(h) }, { onDelete(h) }) }
     }
 }
 
@@ -387,7 +395,7 @@ private fun EmptyState() {
 }
 
 @Composable
-private fun HabitCard(h: HabitEntity, completed: Boolean, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
+private fun HabitCard(h: HabitEntity, completed: Boolean, streak: Int, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
     val palette = LocalSparkPalette.current
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -398,6 +406,7 @@ private fun HabitCard(h: HabitEntity, completed: Boolean, toggle: () -> Unit, ed
         Column(Modifier.weight(1f).clickable(onClick = toggle)) {
             Text(h.title, color = if (completed) Muted else White, fontWeight = FontWeight.SemiBold, textDecoration = if (completed) TextDecoration.LineThrough else TextDecoration.None)
             Text(listOf(h.category, h.note, h.reminderTime).filter { it.isNotBlank() }.joinToString(" • "), color = Muted, fontSize = 11.sp, maxLines = 2)
+            if (streak > 0) Text("🔥 $streak روز زنجیره", color = Cyan, fontSize = 10.sp)
         }
         Box {
             TextButton(onClick = { menu = true }) { Text("•••", color = Muted) }
