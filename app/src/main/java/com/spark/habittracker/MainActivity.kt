@@ -143,6 +143,13 @@ abstract class SparkDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE habits ADD COLUMN reminderTime TEXT NOT NULL DEFAULT '08:00'")
                 db.execSQL("ALTER TABLE habits ADD COLUMN isEnabled INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE habit_logs ADD COLUMN completionTimestamp INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS legacy_habit_metadata (
+                    habitId INTEGER NOT NULL PRIMARY KEY, scheduledDays TEXT NOT NULL,
+                    reminderTime TEXT NOT NULL, isEnabled INTEGER NOT NULL
+                )""")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS legacy_log_metadata (
+                    logId INTEGER NOT NULL PRIMARY KEY, completionTimestamp INTEGER NOT NULL
+                )""")
                 db.execSQL("UPDATE habits SET scheduledDays = COALESCE((SELECT scheduledDays FROM legacy_habit_metadata WHERE habitId = habits.id), scheduledDays)")
                 db.execSQL("UPDATE habits SET reminderTime = COALESCE((SELECT reminderTime FROM legacy_habit_metadata WHERE habitId = habits.id), reminderTime)")
                 db.execSQL("UPDATE habits SET isEnabled = COALESCE((SELECT isEnabled FROM legacy_habit_metadata WHERE habitId = habits.id), isEnabled)")
