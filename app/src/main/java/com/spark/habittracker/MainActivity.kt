@@ -54,16 +54,27 @@ private val Muted = Color(0xFFA9A0C2)
 private val White = Color(0xFFF8F5FF)
 
 @Entity(tableName = "habits")
-data class HabitEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val title: String, val note: String, val category: String, val createdAt: Long = System.currentTimeMillis())
+data class HabitEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String, val note: String, val category: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val scheduledDays: String = "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY",
+    val reminderTime: String = "08:00", val isEnabled: Boolean = true
+)
 
 @Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "date"], unique = true)], foreignKeys = [ForeignKey(entity = HabitEntity::class, parentColumns = ["id"], childColumns = ["habitId"], onDelete = ForeignKey.CASCADE)])
-data class HabitLogEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val habitId: Long, val date: String, val isCompleted: Boolean)
+data class HabitLogEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val habitId: Long, val date: String, val isCompleted: Boolean, val completionTimestamp: Long = System.currentTimeMillis())
+
+@Entity(tableName = "user_settings")
+data class UserSettingsEntity(@PrimaryKey val id: Int = 1, val theme: String = "neon", val accent: String = "violet", val reducedMotion: Boolean = false)
 
 @Dao
 interface HabitDao {
     @Query("SELECT * FROM habits ORDER BY createdAt DESC") fun observeHabits(): Flow<List<HabitEntity>>
     @Query("SELECT * FROM habit_logs WHERE date = :date") fun observeLogs(date: String): Flow<List<HabitLogEntity>>
     @Query("SELECT * FROM habit_logs") fun observeAllLogs(): Flow<List<HabitLogEntity>>
+    @Query("SELECT * FROM user_settings WHERE id = 1") fun observeSettings(): Flow<UserSettingsEntity?>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveSettings(settings: UserSettingsEntity)
     @Insert suspend fun insertHabit(habit: HabitEntity): Long
     @Update suspend fun updateHabit(habit: HabitEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveLog(log: HabitLogEntity)
@@ -71,7 +82,7 @@ interface HabitDao {
     @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class], version = 2, exportSchema = false)
+@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class], version = 3, exportSchema = false)
 abstract class SparkDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
 
@@ -81,29 +92,43 @@ abstract class SparkDatabase : RoomDatabase() {
                 db.execSQL("""CREATE TABLE IF NOT EXISTS habits (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                     title TEXT NOT NULL, note TEXT NOT NULL, category TEXT NOT NULL,
-                    createdAt INTEGER NOT NULL
+                    createdAt INTEGER NOT NULL, scheduledDays TEXT NOT NULL,
+                    reminderTime TEXT NOT NULL, isEnabled INTEGER NOT NULL
                 )""")
-                db.execSQL("""INSERT INTO habits (id, title, note, category, createdAt)
-                    SELECT id, title, description, category, CAST(strftime('%s','now') AS INTEGER) * 1000
-                    FROM tasks""")
+                db.execSQL("""INSERT INTO habits (id, title, note, category, createdAt, scheduledDays, reminderTime, isEnabled)
+                    SELECT id, title, description, category, CAST(strftime('%s','now') AS INTEGER) * 1000,
+                    scheduledDays, reminderTime, isEnabled FROM tasks""")
                 db.execSQL("""CREATE TABLE IF NOT EXISTS habit_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                     habitId INTEGER NOT NULL, date TEXT NOT NULL, isCompleted INTEGER NOT NULL,
+                    completionTimestamp INTEGER NOT NULL,
                     FOREIGN KEY(habitId) REFERENCES habits(id) ON UPDATE NO ACTION ON DELETE CASCADE
                 )""")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_habit_logs_habitId_date ON habit_logs(habitId, date)")
-                db.execSQL("""INSERT INTO habit_logs (id, habitId, date, isCompleted)
-                    SELECT id, taskId, date, isCompleted FROM task_logs
+                db.execSQL("""INSERT INTO habit_logs (id, habitId, date, isCompleted, completionTimestamp)
+                    SELECT id, taskId, date, isCompleted, completionTimestamp FROM task_logs
                     WHERE taskId IN (SELECT id FROM habits)""")
                 db.execSQL("DROP TABLE task_logs")
                 db.execSQL("DROP TABLE tasks")
+            }
+        }
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN scheduledDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'")
+                db.execSQL("ALTER TABLE habits ADD COLUMN reminderTime TEXT NOT NULL DEFAULT '08:00'")
+                db.execSQL("ALTER TABLE habits ADD COLUMN isEnabled INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE habit_logs ADD COLUMN completionTimestamp INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS user_settings (
+                    id INTEGER NOT NULL PRIMARY KEY, theme TEXT NOT NULL, accent TEXT NOT NULL, reducedMotion INTEGER NOT NULL
+                )""")
+                db.execSQL("INSERT OR IGNORE INTO user_settings (id, theme, accent, reducedMotion) VALUES (1, 'neon', 'violet', 0)")
             }
         }
     }
 }
 
 class MainActivity : ComponentActivity() {
-    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2).build() }
+    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3).build() }
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { SparkTheme { SparkApp(db.habitDao(), db) } } }
 }
 
