@@ -109,22 +109,30 @@ abstract class SparkDatabase : RoomDatabase() {
                 db.execSQL("""CREATE TABLE IF NOT EXISTS habits (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                     title TEXT NOT NULL, note TEXT NOT NULL, category TEXT NOT NULL,
-                    createdAt INTEGER NOT NULL, scheduledDays TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )""")
+                db.execSQL("""INSERT INTO habits (id, title, note, category, createdAt)
+                    SELECT id, title, description, category, CAST(strftime('%s','now') AS INTEGER) * 1000 FROM tasks""")
+                db.execSQL("""CREATE TABLE legacy_habit_metadata (
+                    habitId INTEGER NOT NULL PRIMARY KEY, scheduledDays TEXT NOT NULL,
                     reminderTime TEXT NOT NULL, isEnabled INTEGER NOT NULL
                 )""")
-                db.execSQL("""INSERT INTO habits (id, title, note, category, createdAt, scheduledDays, reminderTime, isEnabled)
-                    SELECT id, title, description, category, CAST(strftime('%s','now') AS INTEGER) * 1000,
-                    scheduledDays, reminderTime, isEnabled FROM tasks""")
+                db.execSQL("""INSERT INTO legacy_habit_metadata (habitId, scheduledDays, reminderTime, isEnabled)
+                    SELECT id, scheduledDays, reminderTime, isEnabled FROM tasks""")
                 db.execSQL("""CREATE TABLE IF NOT EXISTS habit_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                     habitId INTEGER NOT NULL, date TEXT NOT NULL, isCompleted INTEGER NOT NULL,
-                    completionTimestamp INTEGER NOT NULL,
                     FOREIGN KEY(habitId) REFERENCES habits(id) ON UPDATE NO ACTION ON DELETE CASCADE
                 )""")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_habit_logs_habitId_date ON habit_logs(habitId, date)")
-                db.execSQL("""INSERT INTO habit_logs (id, habitId, date, isCompleted, completionTimestamp)
-                    SELECT id, taskId, date, isCompleted, completionTimestamp FROM task_logs
+                db.execSQL("""INSERT INTO habit_logs (id, habitId, date, isCompleted)
+                    SELECT id, taskId, date, isCompleted FROM task_logs
                     WHERE taskId IN (SELECT id FROM habits)""")
+                db.execSQL("""CREATE TABLE legacy_log_metadata (
+                    logId INTEGER NOT NULL PRIMARY KEY, completionTimestamp INTEGER NOT NULL
+                )""")
+                db.execSQL("""INSERT INTO legacy_log_metadata (logId, completionTimestamp)
+                    SELECT id, completionTimestamp FROM task_logs""")
                 db.execSQL("DROP TABLE task_logs")
                 db.execSQL("DROP TABLE tasks")
             }
@@ -135,6 +143,12 @@ abstract class SparkDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE habits ADD COLUMN reminderTime TEXT NOT NULL DEFAULT '08:00'")
                 db.execSQL("ALTER TABLE habits ADD COLUMN isEnabled INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE habit_logs ADD COLUMN completionTimestamp INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE habits SET scheduledDays = COALESCE((SELECT scheduledDays FROM legacy_habit_metadata WHERE habitId = habits.id), scheduledDays)")
+                db.execSQL("UPDATE habits SET reminderTime = COALESCE((SELECT reminderTime FROM legacy_habit_metadata WHERE habitId = habits.id), reminderTime)")
+                db.execSQL("UPDATE habits SET isEnabled = COALESCE((SELECT isEnabled FROM legacy_habit_metadata WHERE habitId = habits.id), isEnabled)")
+                db.execSQL("UPDATE habit_logs SET completionTimestamp = COALESCE((SELECT completionTimestamp FROM legacy_log_metadata WHERE logId = habit_logs.id), completionTimestamp)")
+                db.execSQL("DROP TABLE IF EXISTS legacy_habit_metadata")
+                db.execSQL("DROP TABLE IF EXISTS legacy_log_metadata")
                 db.execSQL("""CREATE TABLE IF NOT EXISTS user_settings (
                     id INTEGER NOT NULL PRIMARY KEY, theme TEXT NOT NULL, accent TEXT NOT NULL, reducedMotion INTEGER NOT NULL
                 )""")
