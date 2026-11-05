@@ -35,7 +35,7 @@ gradle testDebugUnitTest assembleDebug
 
 The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
-GitHub Actions runs unit tests and assembles the debug APK on pushes to `main`, `master`, and `repair/**`, and on pull requests targeting the main branches. The APK is uploaded as `Spark-debug-apk`.
+GitHub Actions runs unit tests and assembles the debug APK on pushes to `main` and `master`, and on pull requests targeting the main branches. The APK is uploaded as `Spark-debug-apk`.
 
 ## Current limitations
 
