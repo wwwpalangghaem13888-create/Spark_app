@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SparkTheme(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { MaterialTheme(colorScheme = darkColorScheme(primary = Lime, secondary = Cyan, background = Ink, surface = Panel, onPrimary = Ink, onBackground = White, onSurface = White), content = content) }
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { MaterialTheme(colorScheme = darkColorScheme(primary = Violet, secondary = Cyan, background = Ink, surface = Panel, onPrimary = Ink, onBackground = White, onSurface = White), content = content) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,10 +138,10 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
         bottomBar = { NavigationBar(containerColor = Panel) {
             listOf("خانه" to Icons.Default.Home, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights).forEachIndexed { i, item ->
                 NavigationBarItem(selected = tab == i, onClick = { tab = i; if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Lime, selectedTextColor = Lime, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
+                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
         } },
-        floatingActionButton = { if (tab == 0) FloatingActionButton(onClick = { editing = null; editorOpen = true }, containerColor = Lime, contentColor = Ink) { Icon(Icons.Default.Add, "افزودن عادت") } }
+        floatingActionButton = { if (tab == 0) FloatingActionButton(onClick = { editing = null; editorOpen = true }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, "افزودن عادت") } }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
@@ -221,7 +221,7 @@ private fun Metric(label: String, value: String, modifier: Modifier) {
 @Composable
 private fun EmptyState() {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(Icons.Default.CheckCircle, null, tint = Lime, modifier = Modifier.size(34.dp))
+        Icon(Icons.Default.CheckCircle, null, tint = Violet, modifier = Modifier.size(34.dp))
         Text("هنوز عادتی ثبت نشده", color = White, fontWeight = FontWeight.Bold)
         Text("با دکمه + اولین عادتت را بساز.", color = Muted, fontSize = 12.sp)
     }
@@ -231,7 +231,7 @@ private fun EmptyState() {
 private fun HabitCard(h: HabitEntity, completed: Boolean, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(28.dp).clip(CircleShape).background(if (completed) Lime else Color.Transparent).clickable(onClick = toggle), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(if (completed) Violet else Color.Transparent).clickable(onClick = toggle), contentAlignment = Alignment.Center) {
             if (completed) Icon(Icons.Default.Check, null, tint = Ink) else Canvas(Modifier.fillMaxSize()) { drawCircle(Muted, style = Stroke(1.5.dp.toPx())) }
         }
         Spacer(Modifier.width(12.dp))
@@ -258,11 +258,11 @@ private fun History(date: LocalDate, changeDate: (LocalDate) -> Unit, habits: Li
             Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(date.format(formatter), color = White, fontWeight = FontWeight.Bold); Text(date.toString(), color = Muted, fontSize = 11.sp) }
             IconButton(onClick = { if (date.isBefore(LocalDate.now())) changeDate(date.plusDays(1)) }) { Icon(Icons.Default.ChevronLeft, "روز بعد", tint = if (date.isBefore(LocalDate.now())) White else Muted) }
         }
-        Text("\${done.size} از \${habits.size} عادت انجام شده", color = Lime, fontWeight = FontWeight.Bold)
+        Text("${done.size} از ${habits.size} عادت انجام شده", color = Violet, fontWeight = FontWeight.Bold)
         if (habits.isEmpty()) EmptyState() else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(habits, key = { it.id }) { h ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (h.id in done) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = if (h.id in done) Lime else Muted)
+                    Icon(if (h.id in done) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = if (h.id in done) Violet else Muted)
                     Spacer(Modifier.width(12.dp)); Text(h.title, color = White, modifier = Modifier.weight(1f))
                     Text(if (h.id in done) "انجام شد" else "ثبت نشده", color = Muted, fontSize = 11.sp)
                 }
@@ -282,7 +282,7 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(18.dp)) {
             Text("عملکرد هفت روز اخیر", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Text("$rate٪", color = Lime, fontSize = 32.sp, fontWeight = FontWeight.Black)
+            Text("$rate٪", color = Violet, fontSize = 32.sp, fontWeight = FontWeight.Black)
             Text("نسبت ثبت‌های موفق به تعداد عادت‌ها در این هفته", color = Muted, fontSize = 11.sp)
         } }
         item { Text("روند روزانه", color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
@@ -291,16 +291,16 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
                 val count = byDate[day.toString()]?.size ?: 0
                 val ratio = if (habits.isEmpty()) 0f else (count.toFloat() / habits.size).coerceIn(0f, 1f)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Box(Modifier.width(24.dp).height(100.dp), contentAlignment = Alignment.BottomCenter) { Box(Modifier.fillMaxWidth().fillMaxHeight(ratio).clip(RoundedCornerShape(8.dp)).background(Lime)) }
+                    Box(Modifier.width(24.dp).height(100.dp), contentAlignment = Alignment.BottomCenter) { Box(Modifier.fillMaxWidth().fillMaxHeight(ratio).clip(RoundedCornerShape(8.dp)).background(Violet)) }
                     Text(day.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale("fa")), color = Muted, fontSize = 10.sp)
                 }
             }
         } }
         item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
             Text("جمع‌بندی", color = White, fontWeight = FontWeight.Bold)
-            Text("تعداد عادت‌ها: \${habits.size}", color = Muted, fontSize = 13.sp)
+            Text("تعداد عادت‌ها: ${habits.size}", color = Muted, fontSize = 13.sp)
             Text("ثبت‌های موفق در این هفته: $completed", color = Muted, fontSize = 13.sp)
-            if (habits.isEmpty()) Text("برای شروع آمار، یک عادت اضافه کن.", color = Lime, fontSize = 12.sp)
+            if (habits.isEmpty()) Text("برای شروع آمار، یک عادت اضافه کن.", color = Violet, fontSize = 12.sp)
         } }
     }
 }
@@ -319,6 +319,6 @@ private fun HabitEditor(initial: HabitEntity?, dismiss: () -> Unit, save: (Strin
             OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, minLines = 2)
             if (error) Text("عنوان نمی‌تواند خالی باشد.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
         } },
-        confirmButton = { TextButton(onClick = { if (title.isBlank()) error = true else save(title, note, category) }) { Text("ذخیره", color = Lime) } },
+        confirmButton = { TextButton(onClick = { if (title.isBlank()) error = true else save(title, note, category) }) { Text("ذخیره", color = Violet) } },
         dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } })
 }
