@@ -44,14 +44,22 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val Ink = Color(0xFF090716)
-private val Panel = Color(0xFF151127)
-private val PanelAlt = Color(0xFF241A43)
-private val Violet = Color(0xFF8B45FF)
-private val VioletLight = Color(0xFFD6B8FF)
-private val Cyan = Color(0xFF72DDE0)
-private val Muted = Color(0xFFA9A0C2)
-private val White = Color(0xFFF8F5FF)
+private data class SparkPalette(
+    val background: Color, val surface: Color, val surfaceAlt: Color,
+    val accent: Color, val accentLight: Color, val secondary: Color,
+    val muted: Color, val foreground: Color
+)
+private val LocalSparkPalette = compositionLocalOf {
+    SparkPalette(Color(0xFF090716), Color(0xFF151127), Color(0xFF241A43), Color(0xFF8B45FF), Color(0xFFD6B8FF), Color(0xFF72DDE0), Color(0xFFA9A0C2), Color(0xFFF8F5FF))
+}
+private val Ink: Color @Composable get() = LocalSparkPalette.current.background
+private val Panel: Color @Composable get() = LocalSparkPalette.current.surface
+private val PanelAlt: Color @Composable get() = LocalSparkPalette.current.surfaceAlt
+private val Violet: Color @Composable get() = LocalSparkPalette.current.accent
+private val VioletLight: Color @Composable get() = LocalSparkPalette.current.accentLight
+private val Cyan: Color @Composable get() = LocalSparkPalette.current.secondary
+private val Muted: Color @Composable get() = LocalSparkPalette.current.muted
+private val White: Color @Composable get() = LocalSparkPalette.current.foreground
 
 @Entity(tableName = "habits")
 data class HabitEntity(
@@ -129,12 +137,29 @@ abstract class SparkDatabase : RoomDatabase() {
 
 class MainActivity : ComponentActivity() {
     private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3).build() }
-    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { SparkTheme { SparkApp(db.habitDao(), db) } } }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            val settings by db.habitDao().observeSettings().collectAsState(initial = null)
+            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(db.habitDao(), db) }
+        }
+    }
 }
 
 @Composable
-private fun SparkTheme(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { MaterialTheme(colorScheme = darkColorScheme(primary = Violet, secondary = Cyan, background = Ink, surface = Panel, onPrimary = Ink, onBackground = White, onSurface = White), content = content) }
+private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> Unit) {
+    val accent = when (settings.accent) {
+        "cyan" -> Color(0xFF42DCE8)
+        "lime" -> Color(0xFFC5F36A)
+        "pink" -> Color(0xFFFF75C8)
+        else -> Color(0xFF9A63FF)
+    }
+    val background = if (settings.theme == "minimal") Color(0xFF101820) else Color(0xFF090716)
+    val surface = if (settings.theme == "minimal") Color(0xFF1B2731) else Color(0xFF151127)
+    val palette = SparkPalette(background, surface, surface.copy(alpha = 0.78f), accent, accent.copy(alpha = 0.75f), Color(0xFF72DDE0), Color(0xFFA9A0C2), Color(0xFFF8F5FF))
+    CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides LayoutDirection.Rtl) {
+        MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.Black, onBackground = palette.foreground, onSurface = palette.foreground), content = content)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -211,10 +236,11 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
         item {
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(listOf(Color(0xFF241644), Panel, Color(0xFF17112D)))).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
+                    val palette = LocalSparkPalette.current
                     Canvas(Modifier.fillMaxSize()) {
-                        drawCircle(Color(0xFF34235A), style = Stroke(10.dp.toPx()))
+                        drawCircle(palette.surfaceAlt, style = Stroke(10.dp.toPx()))
                         drawArc(
-                            brush = Brush.sweepGradient(listOf(VioletLight, Violet, Color(0xFF5420C5), VioletLight)),
+                            brush = Brush.sweepGradient(listOf(palette.accentLight, palette.accent, Color(0xFF5420C5), palette.accentLight)),
                             startAngle = -90f,
                             sweepAngle = 360f * animatedProgress,
                             useCenter = false,
@@ -264,10 +290,11 @@ private fun EmptyState() {
 
 @Composable
 private fun HabitCard(h: HabitEntity, completed: Boolean, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
+    val palette = LocalSparkPalette.current
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(28.dp).clip(CircleShape).background(if (completed) Violet else Color.Transparent).clickable(onClick = toggle), contentAlignment = Alignment.Center) {
-            if (completed) Icon(Icons.Default.Check, null, tint = Ink) else Canvas(Modifier.fillMaxSize()) { drawCircle(Muted, style = Stroke(1.5.dp.toPx())) }
+            if (completed) Icon(Icons.Default.Check, null, tint = Ink) else Canvas(Modifier.fillMaxSize()) { drawCircle(palette.muted, style = Stroke(1.5.dp.toPx())) }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).clickable(onClick = toggle)) {
