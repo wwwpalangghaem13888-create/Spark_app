@@ -275,7 +275,21 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     onArchive = { task -> scope.launch { taskRepository.archive(task.id) } },
                     onDelete = { task -> scope.launch { taskRepository.deletePermanently(task.id) } }
                 )
-                2 -> History(date, { date = it }, scheduledHabits, done)
+                2 -> SparkCalendarScreen(
+                    selectedDate = date,
+                    onDateChange = { date = it },
+                    habits = habits,
+                    tasks = tasks,
+                    logs = allLogs,
+                    onToggleHabit = { habit, completed ->
+                        scope.launch {
+                            dao.saveLog(HabitLogEntity(habitId = habit.id, date = date.toString(), isCompleted = completed))
+                        }
+                    },
+                    onToggleTask = { task, completed ->
+                        scope.launch { taskRepository.setCompleted(task, completed) }
+                    }
+                )
                 3 -> Statistics(habits, allLogs)
                 else -> ProgressHub(todayHabits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
             }
