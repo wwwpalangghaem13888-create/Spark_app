@@ -66,6 +66,7 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(goal.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     if (goal.description.isNotBlank()) Text(goal.description, style = MaterialTheme.typography.bodySmall)
+                    goal.targetDate?.let { Text("مهلت: " + it, style = MaterialTheme.typography.labelSmall) }
                     Text(completed.toString() + " از " + goal.targetValue.toInt() + " فعالیت مرتبط", style = MaterialTheme.typography.bodySmall)
                     LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(8.dp))
                     Text((progress * 100).toInt().toString() + "٪ • " + linkedTasks.size + " وظیفه و " + linkedHabitIds.size + " عادت متصل", style = MaterialTheme.typography.labelSmall)
@@ -83,6 +84,12 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
                 OutlinedTextField(title, { title = it; error = null }, label = { Text("عنوان هدف") }, singleLine = true)
                 OutlinedTextField(description, { description = it }, label = { Text("توضیحات") })
                 OutlinedTextField(target, { target = it; error = null }, label = { Text("تعداد فعالیت موردنیاز") }, singleLine = true)
+                OutlinedTextField(
+                    targetDate,
+                    { targetDate = it; error = null },
+                    label = { Text("تاریخ هدف (yyyy-MM-dd، اختیاری)") },
+                    singleLine = true
+                )
                 Text("وظایف مرتبط")
                 tasks.filter { !it.archived }.forEach { task ->
                     FilterChip(selected = task.id in selectedTaskIds,
