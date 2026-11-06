@@ -53,7 +53,7 @@ internal fun ReminderModeSelector(
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(
             localizedText(language, "نوع یادآوری", "Reminder type", "نوع التذكير"),
-            color = if (hasReminderTime) Muted else Muted.copy(alpha = 0.55f),
+            color = if (hasReminderTime) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             fontSize = 12.sp
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -88,10 +88,10 @@ internal fun ReminderModeSelector(
                 localizedText(
                     language,
                     "دسترسی زمان‌بندی دقیق فعال نیست؛ زنگ ممکن است با تأخیر اجرا شود. دسترسی «هشدارها و یادآورها» را در تنظیمات برنامه فعال کن.",
-                    "Exact alarm access is off. The alarm may be delayed; enable "Alarms & reminders" in Android app settings.",
+                    "Exact alarm access is off. The alarm may be delayed; enable \"Alarms & reminders\" in Android app settings.",
                     "إذن التنبيهات الدقيقة غير مفعّل؛ قد يتأخر المنبّه. فعّل إذن «التنبيهات والتذكيرات» من إعدادات التطبيق."
                 ),
-                color = Muted,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 2.dp)
             )

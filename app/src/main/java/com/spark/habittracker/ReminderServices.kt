@@ -9,8 +9,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioManager
-import android.media.Ringtone
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
@@ -133,7 +133,7 @@ internal suspend fun cancelAndDisableReminders(
 }
 
 class AlarmRingingService : Service() {
-    private var ringtone: Ringtone? = null
+    private var mediaPlayer: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -150,8 +150,8 @@ class AlarmRingingService : Service() {
                 NotificationChannel(ALARM_CHANNEL_ID, localizedText(language, "زنگ‌های Spark", "Spark alarms", "منبّهات Spark"), NotificationManager.IMPORTANCE_HIGH)
             )
         }
-        val stopIntent = Intent(this, AlarmRingingService::class.java).setAction(ACTION_STOP)
-        val stopPendingIntent = PendingIntent.getService(
+        val stopIntent = Intent(this, AlarmStopReceiver::class.java).setAction(ACTION_STOP)
+        val stopPendingIntent = PendingIntent.getBroadcast(
             this, STOP_REQUEST_CODE, stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -166,14 +166,23 @@ class AlarmRingingService : Service() {
             .build()
         startForeground(NOTIFICATION_ID, notification)
 
-        ringtone?.stop()
+        mediaPlayer?.release()
+        mediaPlayer = null
         val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        ringtone = alarmUri?.let { RingtoneManager.getRingtone(applicationContext, it) }?.apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
-            @Suppress("DEPRECATION")
-            setStreamType(AudioManager.STREAM_ALARM)
-            play()
+        if (alarmUri != null) {
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                setDataSource(applicationContext, alarmUri)
+                isLooping = true
+                prepare()
+                start()
+            }
         }
         if (wakeLock?.isHeld != true) {
             wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
@@ -185,8 +194,11 @@ class AlarmRingingService : Service() {
     }
 
     override fun onDestroy() {
-        ringtone?.stop()
-        ringtone = null
+        mediaPlayer?.run {
+            if (isPlaying) stop()
+            release()
+        }
+        mediaPlayer = null
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -279,6 +291,14 @@ class ReminderReceiver : BroadcastReceiver() {
             } finally {
                 pending.finish()
             }
+        }
+    }
+}
+
+class AlarmStopReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == AlarmRingingService.ACTION_STOP) {
+            context.stopService(Intent(context, AlarmRingingService::class.java))
         }
     }
 }
