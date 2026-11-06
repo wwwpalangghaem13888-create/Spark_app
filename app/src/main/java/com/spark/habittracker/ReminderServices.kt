@@ -75,7 +75,7 @@ object ReminderScheduler {
         return "spark_reminders_" + Integer.toHexString(uriKey.hashCode())
     }
 
-    fun schedule(context: Context, reminder: ReminderEntity) {
+    fun schedule(context: Context, reminder: ReminderEntity, alarmStyle: Boolean = false) {
         val intent = Intent(context, ReminderReceiver::class.java)
             .setAction(ACTION_FIRE)
             .putExtra("reminder_id", reminder.id)
@@ -86,7 +86,16 @@ object ReminderScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.snoozedUntil ?: reminder.triggerAt, pending)
+        val triggerAt = reminder.snoozedUntil ?: reminder.triggerAt
+        if (alarmStyle && reminder.snoozedUntil == null) {
+            val showIntent = PendingIntent.getActivity(
+                context, 910000 + reminder.id.toInt(), Intent(context, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarm.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, showIntent), pending)
+        } else {
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+        }
     }
 
     fun cancel(context: Context, reminderId: Long) {
@@ -164,7 +173,11 @@ class ReminderReceiver : BroadcastReceiver() {
                     if (intent.action == ReminderScheduler.ACTION_SNOOZE) {
                         val until = System.currentTimeMillis() + 10 * 60 * 1000L
                         dao.snoozeReminder(reminderId, until)
-                        dao.getEnabledReminders().firstOrNull { it.id == reminderId }?.let { ReminderScheduler.schedule(context, it) }
+                        dao.getEnabledReminders().firstOrNull { it.id == reminderId }?.let { pendingReminder ->
+                            val alarmStyle = pendingReminder.ownerType == "HABIT" &&
+                                db.habitDao().findHabit(pendingReminder.ownerId)?.reminderMode == "ALARM"
+                            ReminderScheduler.schedule(context, pendingReminder, alarmStyle)
+                        }
                     } else {
                         val reminder = dao.getEnabledReminders().firstOrNull { it.id == reminderId }
                         if (reminder != null) {
@@ -180,7 +193,7 @@ class ReminderReceiver : BroadcastReceiver() {
                                 val next = habit?.let { nextHabitReminder(it, System.currentTimeMillis() + 1000) }
                                 if (next != null) {
                                     dao.updateReminderTrigger(reminder.id, next)
-                                    ReminderScheduler.schedule(context, reminder.copy(triggerAt = next, snoozedUntil = null))
+                                    ReminderScheduler.schedule(context, reminder.copy(triggerAt = next, snoozedUntil = null), habit?.reminderMode == "ALARM")
                                 } else {
                                     dao.setReminderEnabled(reminder.id, false)
                                 }
@@ -251,7 +264,8 @@ class SparkBootReceiver : BroadcastReceiver() {
                                 db.productivityDao().updateReminderTrigger(reminder.id, nextTrigger)
                                 ReminderScheduler.schedule(
                                     context,
-                                    reminder.copy(triggerAt = nextTrigger, snoozedUntil = null)
+                                    reminder.copy(triggerAt = nextTrigger, snoozedUntil = null),
+                                    alarmStyle = habit?.reminderMode == "ALARM"
                                 )
                             } else {
                                 db.productivityDao().setReminderEnabled(reminder.id, false)
