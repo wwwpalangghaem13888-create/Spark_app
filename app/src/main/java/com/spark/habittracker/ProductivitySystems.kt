@@ -117,6 +117,12 @@ interface ProductivityDao {
     @Query("SELECT * FROM task_subtasks WHERE taskId = :taskId ORDER BY position, id")
     fun observeSubtasks(taskId: Long): Flow<List<TaskSubtaskEntity>>
 
+    @Query("SELECT * FROM task_subtasks")
+    suspend fun getAllSubtasks(): List<TaskSubtaskEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreSubtasks(items: List<TaskSubtaskEntity>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSubtask(subtask: TaskSubtaskEntity): Long
 
@@ -128,6 +134,12 @@ interface ProductivityDao {
 
     @Query("SELECT * FROM task_completion_history WHERE taskId = :taskId ORDER BY completedAt DESC")
     fun observeTaskHistory(taskId: Long): Flow<List<TaskCompletionEntity>>
+
+    @Query("SELECT * FROM task_completion_history")
+    suspend fun getAllTaskHistory(): List<TaskCompletionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreTaskHistory(items: List<TaskCompletionEntity>)
 
     @Query("SELECT * FROM tasks WHERE id = :taskId LIMIT 1")
     suspend fun findTaskForCompletion(taskId: Long): TaskEntity?
