@@ -625,15 +625,17 @@ private fun Metric(label: String, value: String, modifier: Modifier) {
 
 @Composable
 private fun EmptyState() {
+    val language = LocalSparkLanguage.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Default.CheckCircle, null, tint = Violet, modifier = Modifier.size(34.dp))
-        Text("هنوز عادتی ثبت نشده", color = White, fontWeight = FontWeight.Bold)
-        Text("با دکمه + اولین عادتت را بساز.", color = Muted, fontSize = 12.sp)
+        Text(localizedText(language, "هنوز عادتی ثبت نکردی", "No habits yet", "لا توجد عادات بعد"), color = White, fontWeight = FontWeight.Bold)
+        Text(localizedText(language, "با دکمه + اولین عادتت را بساز.", "Tap + to add your first habit.", "اضغط + لإضافة عادتك الأولى."), color = Muted, fontSize = 12.sp)
     }
 }
 
 @Composable
 private fun HabitCard(h: HabitEntity, completed: Boolean, streak: Int, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
+    val language = LocalSparkLanguage.current
     val palette = LocalSparkPalette.current
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -644,13 +646,13 @@ private fun HabitCard(h: HabitEntity, completed: Boolean, streak: Int, toggle: (
         Column(Modifier.weight(1f).clickable(onClick = toggle)) {
             Text(h.title, color = if (completed) Muted else White, fontWeight = FontWeight.SemiBold, textDecoration = if (completed) TextDecoration.LineThrough else TextDecoration.None)
             Text(listOf(h.category, h.note, h.reminderTime).filter { it.isNotBlank() }.joinToString(" • "), color = Muted, fontSize = 11.sp, maxLines = 2)
-            if (streak > 0) Text("🔥 $streak روز زنجیره", color = Cyan, fontSize = 10.sp)
+            if (streak > 0) Text("🔥 $streak " + localizedText(language, "روز زنجیره", "day streak", "أيام متتالية"), color = Cyan, fontSize = 10.sp)
         }
         Box {
             TextButton(onClick = { menu = true }) { Text("•••", color = Muted) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("ویرایش") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; edit() })
-                DropdownMenuItem(text = { Text("حذف") }, leadingIcon = { Icon(Icons.Default.Delete, null) }, onClick = { menu = false; delete() })
+                DropdownMenuItem(text = { Text(localizedText(language, "ویرایش", "Edit", "تعديل")) }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; edit() })
+                DropdownMenuItem(text = { Text(localizedText(language, "حذف", "Delete", "حذف")) }, leadingIcon = { Icon(Icons.Default.Delete, null) }, onClick = { menu = false; delete() })
             }
         }
     }
@@ -658,12 +660,13 @@ private fun HabitCard(h: HabitEntity, completed: Boolean, streak: Int, toggle: (
 
 @Composable
 private fun History(date: LocalDate, changeDate: (LocalDate) -> Unit, habits: List<HabitEntity>, done: Set<Long>) {
+    val language = LocalSparkLanguage.current
     val formatter = remember { DateTimeFormatter.ofPattern("EEEE، d MMMM", Locale("fa")) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            IconButton(onClick = { changeDate(date.minusDays(1)) }) { Icon(Icons.Default.ChevronRight, "روز قبل", tint = White) }
+            IconButton(onClick = { changeDate(date.minusDays(1)) }) { Icon(Icons.Default.ChevronRight, localizedText(language, "روز قبل", "Previous day", "اليوم السابق"), tint = White) }
             Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(date.format(formatter), color = White, fontWeight = FontWeight.Bold); Text(date.toString(), color = Muted, fontSize = 11.sp) }
-            IconButton(onClick = { if (date.isBefore(LocalDate.now())) changeDate(date.plusDays(1)) }) { Icon(Icons.Default.ChevronLeft, "روز بعد", tint = if (date.isBefore(LocalDate.now())) White else Muted) }
+            IconButton(onClick = { if (date.isBefore(LocalDate.now())) changeDate(date.plusDays(1)) }) { Icon(Icons.Default.ChevronLeft, localizedText(language, "روز بعد", "Next day", "اليوم التالي"), tint = if (date.isBefore(LocalDate.now())) White else Muted) }
         }
         Text("${done.size} از ${habits.size} عادت انجام شده", color = Violet, fontWeight = FontWeight.Bold)
         if (habits.isEmpty()) EmptyState() else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
