@@ -456,7 +456,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     }
                 )
                 3 -> Statistics(habits, allLogs, tasks, focusSessions)
-                4 -> ProgressHub(todayHabits, allLogs, todayLogs, taskHistory, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
+                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
                 5 -> GoalsScreen(db.productivityDao(), tasks, habits)
                 6 -> FocusScreen(db.productivityDao())
                 else -> BackupScreen(db)
@@ -722,18 +722,29 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
 
 
 @Composable
-private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, taskHistory: List<TaskCompletionEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
+private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
     val today = LocalDate.now()
     val completedLogs = completedHabitLogsThroughDate(allLogs, today)
     val taskRewards = taskHistory.filter { it.completed && runCatching { LocalDate.parse(it.activityDate) <= today }.getOrDefault(false) }
         .map { it.taskId to it.activityDate }.distinct().size
-    val xp = calculateExperience(completedLogs.size + taskRewards)
+    val totalActivities = completedLogs.size + taskRewards
+    val xp = calculateExperience(totalActivities)
     val level = calculateLevel(xp)
     val xpInLevel = xp % 100
     val activeCount = habits.count { it.isEnabled }
     val todayDone = todayLogs.count { it.isCompleted && habits.any { h -> h.id == it.habitId && h.isEnabled } }
-    val challengeTarget = minOf(3, activeCount)
-    val challengeProgress = if (challengeTarget == 0) 0f else (todayDone.toFloat() / challengeTarget).coerceIn(0f, 1f)
+    val todayTaskDone = taskHistory.filter { it.completed && it.activityDate == today.toString() }.map { it.taskId }.distinct().size
+    val todayTaskTarget = tasks.count { it.dueDate == today.toString() }
+    val challengeTarget = minOf(3, activeCount + todayTaskTarget)
+    val challengeDone = todayDone + todayTaskDone
+    val challengeProgress = if (challengeTarget == 0) 0f else (challengeDone.toFloat() / challengeTarget).coerceIn(0f, 1f)
+    val weekStart = today.minusDays(6)
+    val weeklyHabitDone = completedLogs.count { runCatching { val d = LocalDate.parse(it.date); d >= weekStart && d <= today }.getOrDefault(false) }
+    val weeklyTaskDone = taskHistory.filter { it.completed && runCatching { val d = LocalDate.parse(it.activityDate); d >= weekStart && d <= today }.getOrDefault(false) }
+        .map { it.taskId to it.activityDate }.distinct().size
+    val weeklyDone = weeklyHabitDone + weeklyTaskDone
+    val weeklyTarget = 10
+    val weeklyProgress = (weeklyDone.toFloat() / weeklyTarget).coerceIn(0f, 1f)
     val milestones = listOf(1 to "اولین جرقه", 10 to "ده قدم", 30 to "پیوستگی", 100 to "صد ثبت موفق")
     val recentStart = LocalDate.now().minusDays(6)
     val previousStart = LocalDate.now().minusDays(13)
@@ -767,17 +778,26 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
                 Text("چالش امروز", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Spacer(Modifier.height(6.dp))
-                Text(if (challengeTarget == 0) "برای شروع، یک عادت فعال بساز." else "انجام $challengeTarget عادت امروز", color = Muted, fontSize = 12.sp)
+                Text(if (challengeTarget == 0) "برای شروع، یک وظیفه یا عادت زمان‌بندی کن." else "تکمیل $challengeTarget فعالیت امروز", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(10.dp))
                 LinearProgressIndicator(progress = challengeProgress, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color = Cyan, trackColor = PanelAlt)
-                Text(if (challengeTarget == 0) "بدون عادت فعال" else "$todayDone از $challengeTarget", color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                Text(if (challengeTarget == 0) "بدون فعالیت برنامه‌ریزی‌شده" else "$challengeDone از $challengeTarget", color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
+                Text("چالش هفتگی", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text("هدف: ۱۰ تکمیل یکتای عادت یا وظیفه در هفت روز اخیر", color = Muted, fontSize = 11.sp)
+                Spacer(Modifier.height(9.dp))
+                LinearProgressIndicator(progress = weeklyProgress, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color = Violet, trackColor = PanelAlt)
+                Text("$weeklyDone از $weeklyTarget فعالیت", color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             }
         }
         item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
                 Text("دستاوردها", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 milestones.forEach { (required, name) ->
-                    val unlocked = completedLogs.size >= required
+                    val unlocked = totalActivities >= required
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (unlocked) Icons.Default.EmojiEvents else Icons.Default.Lock, null, tint = if (unlocked) Cyan else Muted)
                         Spacer(Modifier.width(10.dp))
