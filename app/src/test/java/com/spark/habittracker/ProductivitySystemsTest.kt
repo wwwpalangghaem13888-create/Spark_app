@@ -192,4 +192,30 @@ class ProductivitySystemsTest {
         assertTrue(csv.contains("\"one,two\""))
         assertFalse(csv.contains("Read, learn,"))
     }
+
+    @Test
+    fun habitReminderResolvesLocalTimeAcrossDaylightSavingGap() {
+        val zone = java.time.ZoneId.of("Europe/Berlin")
+        val habit = HabitEntity(
+            id = 9L,
+            title = "DST reminder",
+            note = "",
+            category = "test",
+            scheduledDays = "SUNDAY",
+            reminderTime = "02:30"
+        )
+        val afterTransitionStart = java.time.LocalDate.of(2026, 3, 29)
+            .atTime(1, 0)
+            .atZone(zone)
+            .toInstant()
+            .toEpochMilli()
+
+        val next = nextHabitReminder(habit, afterTransitionStart, zone)
+
+        org.junit.Assert.assertNotNull(next)
+        val localReminder = java.time.Instant.ofEpochMilli(next!!)
+            .atZone(zone)
+        assertEquals(java.time.LocalDate.of(2026, 3, 29), localReminder.toLocalDate())
+        assertEquals(java.time.LocalTime.of(3, 30), localReminder.toLocalTime())
+    }
 }
