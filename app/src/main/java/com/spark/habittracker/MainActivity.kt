@@ -1,11 +1,23 @@
 package com.spark.habittracker
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Color as AndroidColor
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Bundle
+import android.view.ContextThemeWrapper
 import android.os.Build
 import android.content.pm.PackageManager
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.NumberPicker
+import android.widget.EditText
+import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModelProvider
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -33,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.painterResource
 import kotlin.math.roundToInt
@@ -72,6 +85,17 @@ private val Muted: Color @Composable get() = LocalSparkPalette.current.muted
 private val White: Color @Composable get() = LocalSparkPalette.current.foreground
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        val selectedLanguage = newBase.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
+            .getString("language", "fa") ?: "fa"
+        val locale = Locale.forLanguageTag(selectedLanguage)
+        val configuration = Configuration(newBase.resources.configuration).apply {
+            setLocale(locale)
+            setLayoutDirection(locale)
+        }
+        super.attachBaseContext(newBase.createConfigurationContext(configuration))
+    }
+
     private val container by lazy { (application as SparkApplication).container }
     private val db by lazy { container.database }
     private val sparkViewModel by lazy {
@@ -85,7 +109,38 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by container.habitRepository.observeSettings().collectAsState(initial = null)
-            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(container, sparkViewModel) }
+            SparkTheme(settings ?: UserSettingsEntity()) {
+                var splashVisible by remember { mutableStateOf(true) }
+                LaunchedEffect(Unit) {
+                    delay(950)
+                    splashVisible = false
+                }
+                Box(Modifier.fillMaxSize()) {
+                    SparkApp(container, sparkViewModel)
+                    if (splashVisible) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(Color.Black),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Image(
+                                    painter = painterResource(R.drawable.spark_logo),
+                                    contentDescription = "Spark logo",
+                                    modifier = Modifier.size(116.dp)
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                Text(
+                                    "SPARK",
+                                    color = Color(0xFFE7D6FF),
+                                    fontSize = 25.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 5.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -96,7 +151,11 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
         "cyan" -> Color(0xFF42DCE8)
         "lime" -> Color(0xFFC5F36A)
         "pink" -> Color(0xFFFF75C8)
-        else -> Color(0xFF9A63FF)
+        else -> runCatching {
+            if (settings.accent.matches(Regex("^#[0-9A-Fa-f]{6}$"))) {
+                Color(AndroidColor.parseColor(settings.accent))
+            } else Color(0xFF9A63FF)
+        }.getOrDefault(Color(0xFF9A63FF))
     }
     val background = when (settings.theme) {
         "dark" -> Color(0xFF020304)
@@ -134,7 +193,11 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
         if (light) Color(0xFF626575) else Color(0xFFA9A0C2),
         if (light) Color(0xFF171923) else Color(0xFFF8F5FF)
     )
-    CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides LayoutDirection.Rtl) {
+    CompositionLocalProvider(
+        LocalSparkPalette provides palette,
+        LocalSparkLanguage provides settings.language,
+        LocalLayoutDirection provides if (settings.language == "en") LayoutDirection.Ltr else LayoutDirection.Rtl
+    ) {
         val colors = if (light) lightColorScheme(
             primary = accent, secondary = palette.secondary, background = background,
             surface = surface, onPrimary = Color.White, onBackground = palette.foreground, onSurface = palette.foreground
