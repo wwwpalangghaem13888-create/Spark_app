@@ -35,20 +35,22 @@ class SparkViewModel(
             try {
                 tasksRepository.observeActiveTasks().collect { _tasks.value = SparkLoadState.Data(it) }
             } catch (error: Throwable) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
                 _tasks.value = SparkLoadState.Error(SparkError.Storage)
                 _errors.emit(SparkError.Storage)
             }
         }
     }
 
-    suspend fun archive(taskId: Long) = mutate { tasksRepository.archive(taskId) }
-    suspend fun deletePermanently(taskId: Long) = mutate { tasksRepository.deletePermanently(taskId) }
-    suspend fun duplicate(task: TaskEntity) = mutate { tasksRepository.duplicate(task) }
-    suspend fun restore(taskId: Long) = mutate { tasksRepository.restore(taskId) }
+    suspend fun archive(taskId: Long): Boolean = mutate { tasksRepository.archive(taskId) }
+    suspend fun deletePermanently(taskId: Long): Boolean = mutate { tasksRepository.deletePermanently(taskId) }
+    suspend fun duplicate(task: TaskEntity): Boolean = mutate { tasksRepository.duplicate(task) }
+    suspend fun restore(taskId: Long): Boolean = mutate { tasksRepository.restore(taskId) }
 
-    private suspend fun mutate(block: suspend () -> Unit) {
-        try {
+    private suspend fun mutate(block: suspend () -> Unit): Boolean {
+        return try {
             block()
+            true
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             _errors.emit(
@@ -59,6 +61,7 @@ class SparkViewModel(
                     else -> SparkError.Unexpected
                 }
             )
+            false
         }
     }
 
