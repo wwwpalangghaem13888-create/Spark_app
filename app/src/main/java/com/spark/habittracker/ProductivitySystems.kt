@@ -249,6 +249,9 @@ interface ProductivityDao {
     @Query("UPDATE reminders SET enabled = :enabled WHERE id = :id")
     suspend fun setReminderEnabled(id: Long, enabled: Boolean): Int
 
+    @Query("UPDATE reminders SET triggerAt = :triggerAt, snoozedUntil = NULL WHERE id = :id")
+    suspend fun updateReminderTrigger(id: Long, triggerAt: Long): Int
+
     @Transaction
     suspend fun recordTaskCompletion(taskId: Long, completed: Boolean, atMillis: Long, date: String): Boolean {
         val task = findTaskForCompletion(taskId) ?: return false
