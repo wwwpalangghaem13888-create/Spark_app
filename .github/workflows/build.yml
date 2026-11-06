@@ -47,8 +47,8 @@ jobs:
           arch: x86_64
           profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -wipe-data
-          disable-animations: true
-          emulator-boot-timeout: 900
+          disable-animations: false
+          emulator-boot-timeout: 1200
           cores: 2
           ram-size: 2048
           heap-size: 256
