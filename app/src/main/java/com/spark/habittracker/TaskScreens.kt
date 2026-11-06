@@ -42,6 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
 @Composable
@@ -191,6 +194,9 @@ fun TaskEditorDialog(
     var description by remember(initial) { mutableStateOf(initial?.description.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
     var dueDate by remember(initial) { mutableStateOf(initial?.dueDate.orEmpty()) }
+    var startAt by remember(initial) { mutableStateOf(initial?.startAt?.let { formatTaskTime(it) }.orEmpty()) }
+    var endAt by remember(initial) { mutableStateOf(initial?.endAt?.let { formatTaskTime(it) }.orEmpty()) }
+    var recurrence by remember(initial) { mutableStateOf(initial?.recurrenceRule) }
     var tags by remember(initial) { mutableStateOf(initial?.tags.orEmpty()) }
     var priority by remember(initial) { mutableIntStateOf(initial?.priority ?: 1) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -204,6 +210,14 @@ fun TaskEditorDialog(
                 OutlinedTextField(description, { description = it }, label = { Text("توضیحات") }, minLines = 2)
                 OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
                 OutlinedTextField(dueDate, { dueDate = it; error = null }, label = { Text("مهلت (YYYY-MM-DD، اختیاری)") }, singleLine = true)
+                OutlinedTextField(startAt, { startAt = it; error = null }, label = { Text("زمان شروع (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
+                OutlinedTextField(endAt, { endAt = it; error = null }, label = { Text("زمان پایان (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
+                Text("تکرار")
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(null to "هیچ‌کدام", "DAILY" to "روزانه", "WEEKLY" to "هفتگی", "WEEKDAYS" to "روزهای کاری", "MONTHLY" to "ماهانه").forEach { (rule, label) ->
+                        FilterChip(selected = recurrence == rule, onClick = { recurrence = rule }, label = { Text(label) })
+                    }
+                }
                 OutlinedTextField(tags, { tags = it }, label = { Text("برچسب‌ها با ویرگول جدا شوند") }, singleLine = true)
                 Text("اولویت")
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -222,6 +236,14 @@ fun TaskEditorDialog(
                     val normalizedDate = dueDate.trim().ifBlank { null }
                     try {
                         normalizedDate?.let(LocalDate::parse)
+                        val normalizedStart = startAt.trim().ifBlank { null }?.let(::parseTaskTime)
+                        val normalizedEnd = endAt.trim().ifBlank { null }?.let(::parseTaskTime)
+                        require(normalizedStart == null || normalizedEnd == null || normalizedEnd > normalizedStart) {
+                            "زمان پایان باید بعد از زمان شروع باشد."
+                        }
+                        require(recurrence == null || normalizedDate != null) {
+                            "برای وظیفه تکرارشونده باید مهلت تعیین شود."
+                        }
                         onSave(
                             TaskEntity(
                                 id = initial?.id ?: 0,
@@ -229,6 +251,10 @@ fun TaskEditorDialog(
                                 description = description,
                                 category = category,
                                 dueDate = normalizedDate,
+                                startAt = normalizedStart,
+                                endAt = normalizedEnd,
+                                recurrenceRule = recurrence,
+                                recurrenceParentId = initial?.recurrenceParentId,
                                 priority = priority,
                                 tags = tags,
                                 completed = initial?.completed ?: false,
@@ -237,8 +263,8 @@ fun TaskEditorDialog(
                                 createdAt = initial?.createdAt ?: System.currentTimeMillis()
                             )
                         )
-                    } catch (_: DateTimeParseException) {
-                        error = "تاریخ باید با قالب YYYY-MM-DD باشد."
+                    } catch (_: Exception) {
+                        error = "تاریخ یا زمان نامعتبر است؛ قالب‌های نمایش‌داده‌شده را بررسی کن."
                     }
                 }
             }) { Text("ذخیره") }
@@ -246,3 +272,12 @@ fun TaskEditorDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } }
     )
 }
+
+
+private fun parseTaskTime(value: String): Long =
+    LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+private fun formatTaskTime(value: Long): String =
+    java.time.Instant.ofEpochMilli(value).atZone(ZoneId.systemDefault())
+        .toLocalDateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
