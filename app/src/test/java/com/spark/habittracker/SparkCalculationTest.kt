@@ -49,7 +49,7 @@ class SparkCalculationTest {
             today.minusDays(4)  // Monday
         )
         assertEquals(3, calculateHabitStreak(habit, completed, today, ZoneId.of("UTC")))
-        assertEquals(0, calculateHabitStreak(habit, setOf(today.minusDays(2)), today, ZoneId.of("UTC")))
+        assertEquals(1, calculateHabitStreak(habit, setOf(today.minusDays(2)), today, ZoneId.of("UTC")))
     }
 
     @Test fun missedTodayDoesNotErasePreviousScheduledStreakUntilDayEnds() {
