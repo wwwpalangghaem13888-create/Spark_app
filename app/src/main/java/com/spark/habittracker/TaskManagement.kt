@@ -55,6 +55,12 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): TaskEntity?
 
+    @Query("SELECT * FROM tasks WHERE archived = 1 ORDER BY updatedAt DESC")
+    fun observeArchivedTasks(): Flow<List<TaskEntity>>
+
+    @Query("UPDATE tasks SET archived = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun restore(id: Long, updatedAt: Long): Int
+
     @Insert
     suspend fun insert(task: TaskEntity): Long
 
@@ -124,6 +130,22 @@ class TaskRepository(private val dao: TaskDao) {
 
     suspend fun deletePermanently(taskId: Long) {
         dao.deletePermanently(taskId)
+    }
+
+    suspend fun duplicate(task: TaskEntity): Long {
+        return dao.insert(task.copy(
+            id = 0,
+            title = task.title + " (کپی)",
+            completed = false,
+            completedAt = null,
+            archived = false,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        ))
+    }
+
+    suspend fun restore(taskId: Long) {
+        dao.restore(taskId, System.currentTimeMillis())
     }
 }
 
