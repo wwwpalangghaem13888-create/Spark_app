@@ -111,7 +111,7 @@ class ProductivitySystemsTest {
             TaskEntity(id = 3, title = "Later", category = "School", completed = false)
         )
         val sessions = listOf(FocusSessionEntity(startedAt = taskTime, plannedDurationSeconds = 1500, actualDurationSeconds = 900, completed = true))
-        val report = buildAnalyticsReport(habits, logs, tasks, emptyList(), sessions, start, end, java.time.ZoneId.of("UTC"))
+        val report = buildAnalyticsReport(listOf(habit), logs, tasks, emptyList(), sessions, start, end, java.time.ZoneId.of("UTC"))
 
         assertEquals(1, report.completedHabits)
         assertEquals(2, report.scheduledHabitOpportunities)
@@ -156,7 +156,7 @@ class ProductivitySystemsTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun analyticsRejectsInvertedDateRange() {
-        buildAnalyticsReport(emptyList(), emptyList(), emptyList(), emptyList(),
+        buildAnalyticsReport(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
             LocalDate.parse("2026-11-07"), LocalDate.parse("2026-11-06"))
     }
 
