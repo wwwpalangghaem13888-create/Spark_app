@@ -474,7 +474,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
             showTaskGuide = false
         }
     }
-    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category, scheduledDays, reminderTime ->
+    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category, scheduledDays, reminderTime, reminderMode ->
         scope.launch {
             val habit = HabitEntity(
                 id = editing?.id ?: 0, title = title.trim(), note = note.trim(),
@@ -482,7 +482,8 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                 createdAt = editing?.createdAt ?: System.currentTimeMillis(),
                 scheduledDays = scheduledDays,
                 reminderTime = reminderTime,
-                isEnabled = editing?.isEnabled ?: true
+                isEnabled = editing?.isEnabled ?: true,
+                reminderMode = reminderMode
             )
             val habitId = habitRepository.save(habit)
             db.productivityDao().deleteRemindersForOwner("HABIT", habitId)
@@ -1159,7 +1160,7 @@ private fun tintNumberPickerText(picker: NumberPicker, color: Int) {
 private fun HabitEditor(
     initial: HabitEntity?,
     dismiss: () -> Unit,
-    save: (String, String, String, String, String) -> Unit
+    save: (String, String, String, String, String, String) -> Unit
 ) {
     val language = LocalSparkLanguage.current
     val wheelTextColor = White.toArgb()
@@ -1179,6 +1180,9 @@ private fun HabitEditor(
     }
     var reminderEnabled by remember(initial) {
         mutableStateOf(initial?.reminderTime?.isNotBlank() == true)
+    }
+    var reminderMode by remember(initial) {
+        mutableStateOf(initial?.reminderMode ?: "NOTIFICATION")
     }
     var selectedTime by remember(initial) {
         mutableStateOf(initial?.reminderTime?.takeIf { it.isNotBlank() })
@@ -1247,6 +1251,23 @@ private fun HabitEditor(
                     )
                 }
                 if (reminderEnabled) {
+                    Text(localizedText(language, "روش یادآوری", "Reminder style", "طريقة التذكير"), color = White, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        FilterChip(
+                            selected = reminderMode == "NOTIFICATION",
+                            onClick = { reminderMode = "NOTIFICATION" },
+                            label = { Text(localizedText(language, "اعلان", "Notification", "إشعار")) }
+                        )
+                        FilterChip(
+                            selected = reminderMode == "ALARM",
+                            onClick = { reminderMode = "ALARM" },
+                            label = { Text(localizedText(language, "زنگ هشدار", "Ringing alarm", "منبه رنان")) }
+                        )
+                    }
+                    Text(
+                        localizedText(language, "حالت زنگ هشدار تا وقتی خودت متوقفش نکنی ادامه دارد.", "Alarm mode keeps ringing until you stop it.", "يستمر المنبه بالرنين حتى توقفه."),
+                        color = Muted, fontSize = 10.sp
+                    )
                     OutlinedButton(
                         onClick = {
                             val parts = selectedTime?.split(":")
@@ -1281,7 +1302,8 @@ private fun HabitEditor(
                     save(
                         title, note, category,
                         days.filter { it.first in selectedDays }.joinToString(",") { it.first },
-                        if (reminderEnabled) selectedTime.orEmpty() else ""
+                        if (reminderEnabled) selectedTime.orEmpty() else "",
+                        if (reminderEnabled) reminderMode else "NOTIFICATION"
                     )
                 }
             }) { Text(localizedText(language, "ذخیره", "Save", "حفظ"), color = Violet) }
