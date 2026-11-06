@@ -120,6 +120,9 @@ interface ProductivityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSubtask(subtask: TaskSubtaskEntity): Long
 
+    @Query("UPDATE task_subtasks SET isCompleted = :completed WHERE id = :id")
+    suspend fun setSubtaskCompleted(id: Long, completed: Boolean): Int
+
     @Query("DELETE FROM task_subtasks WHERE id = :id")
     suspend fun deleteSubtask(id: Long): Int
 
