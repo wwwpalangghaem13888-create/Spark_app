@@ -80,4 +80,19 @@ class SparkCalculationTest {
     }
 
 
+    @Test fun onlyCompletedLogsOnOrBeforeTodayEarnExperience() {
+        val today = LocalDate.of(2026, 11, 6)
+        val logs = listOf(
+            HabitLogEntity(id = 1, habitId = 1, date = "2026-11-05", isCompleted = true),
+            HabitLogEntity(id = 2, habitId = 1, date = "2026-11-06", isCompleted = true),
+            HabitLogEntity(id = 3, habitId = 1, date = "2026-11-07", isCompleted = true),
+            HabitLogEntity(id = 4, habitId = 1, date = "2026-11-04", isCompleted = false),
+            HabitLogEntity(id = 5, habitId = 1, date = "not-a-date", isCompleted = true)
+        )
+        val earned = completedHabitLogsThroughDate(logs, today)
+        assertEquals(listOf(1L, 2L), earned.map { it.id })
+        assertEquals(20, calculateExperience(earned.size))
+    }
+
+
 }
