@@ -23,7 +23,7 @@ data class UserSettingsEntity(
     val theme: String = "neon",
     val accent: String = "violet",
     val reducedMotion: Boolean = false,
-    val language: String = "fa"
+    @ColumnInfo(defaultValue = "'fa'") val language: String = "fa"
 )
 
 @Dao
