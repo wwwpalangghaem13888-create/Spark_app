@@ -10,9 +10,9 @@ class SparkDatabaseMigrationChainTest {
     fun migrationChain_isContiguousFromVersionOneToSix() {
         val migrations = SparkDatabaseFactory.migrations.sortedBy { it.startVersion }
 
-        assertEquals("Expected migrations 1→2 through 5→6", 5, migrations.size)
+        assertEquals("Expected migrations 1→2 through 6→7", 6, migrations.size)
         assertEquals(1, migrations.first().startVersion)
-        assertEquals(6, migrations.last().endVersion)
+        assertEquals(SparkDatabase.VERSION, migrations.last().endVersion)
 
         migrations.zipWithNext().forEach { (current, next) ->
             assertEquals(
@@ -29,6 +29,6 @@ class SparkDatabaseMigrationChainTest {
         val startVersions = SparkDatabaseFactory.migrations.map { it.startVersion }
 
         assertEquals(startVersions.size, startVersions.distinct().size)
-        assertTrue(startVersions.all { it in 1..5 })
+        assertTrue(startVersions.all { it in 1..6 })
     }
 }
