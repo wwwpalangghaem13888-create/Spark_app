@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.rememberDatePickerState
@@ -267,6 +268,7 @@ private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: ()
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskEditorDialog(
     initial: TaskEntity?,
@@ -604,7 +606,6 @@ fun TaskEditorDialog(
 }
 
 @Composable
-@Composable
 fun AppGuideDialog(language: String, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
@@ -640,6 +641,7 @@ fun AppGuideDialog(language: String, onClose: () -> Unit) {
     )
 }
 
+@Composable
 fun TaskGuideDialog(language: String, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
