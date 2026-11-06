@@ -29,6 +29,24 @@ internal fun completedHabitLogsThroughDate(
 
 
 /**
+ * Returns whether a habit is scheduled for a given local date.
+ * Day names are normalized defensively because backups and older records may contain spaces.
+ */
+internal fun HabitEntity.isScheduledOn(
+    date: java.time.LocalDate,
+    zoneId: java.time.ZoneId = java.time.ZoneId.systemDefault()
+): Boolean {
+    if (!isEnabled) return false
+    val createdOn = java.time.Instant.ofEpochMilli(createdAt).atZone(zoneId).toLocalDate()
+    if (date.isBefore(createdOn)) return false
+    val normalizedDays = scheduledDays.split(",")
+        .map { it.trim().uppercase(java.util.Locale.ROOT) }
+        .filter { it.isNotEmpty() }
+        .toSet()
+    return date.dayOfWeek.name in normalizedDays
+}
+
+/**
  * Counts consecutive scheduled days completed by a habit.
  * Unscheduled days do not break a streak; a missed scheduled day does.
  * Dates are compared as local calendar dates, never as elapsed 24-hour blocks.
@@ -40,7 +58,10 @@ internal fun calculateHabitStreak(
     zoneId: java.time.ZoneId = java.time.ZoneId.systemDefault()
 ): Int {
     val createdOn = java.time.Instant.ofEpochMilli(habit.createdAt).atZone(zoneId).toLocalDate()
-    val scheduledDays = habit.scheduledDays.split(",").map { it.trim() }.toSet()
+    val scheduledDays = habit.scheduledDays.split(",")
+        .map { it.trim().uppercase(java.util.Locale.ROOT) }
+        .filter { it.isNotEmpty() }
+        .toSet()
     var cursor = today
     if (cursor.dayOfWeek.name in scheduledDays && cursor !in completedDates) {
         cursor = cursor.minusDays(1)

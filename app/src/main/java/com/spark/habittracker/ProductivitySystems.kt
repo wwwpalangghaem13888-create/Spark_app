@@ -441,10 +441,7 @@ internal fun buildAnalyticsReport(
     val daily = generateSequence(startDate) { current ->
         if (current < endDate) current.plusDays(1) else null
     }.map { day ->
-        val scheduled = activeHabits.filter { habit ->
-            val created = java.time.Instant.ofEpochMilli(habit.createdAt).atZone(zoneId).toLocalDate()
-            !day.isBefore(created) && day.dayOfWeek.name in habit.scheduledDays.split(",").map(String::trim)
-        }
+        val scheduled = activeHabits.filter { it.isScheduledOn(day, zoneId) }
         val completedHabits = scheduled.count { (it.id to day) in completedLogKeys }
         val completedTasks = completedTaskKeys.count { it.second == day }
         val focus = sessions.filter { session ->

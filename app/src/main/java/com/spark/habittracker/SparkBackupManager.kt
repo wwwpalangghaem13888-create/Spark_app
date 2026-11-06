@@ -104,8 +104,10 @@ object SparkBackupManager {
         }) { "Reminder references an unsupported or missing owner." }
         val allowedDays = java.time.DayOfWeek.values().map { it.name }.toSet()
         require(habits.all { habit ->
-            val days = habit.scheduledDays.split(",").map(String::trim).filter(String::isNotEmpty)
-            days.isNotEmpty() && days.distinct().size == days.size && days.all { it in allowedDays } &&
+            val rawDays = habit.scheduledDays.split(",").map { it.trim().uppercase(java.util.Locale.ROOT) }
+            val days = rawDays.filter(String::isNotEmpty)
+            days.isNotEmpty() && days.size == rawDays.size && days.distinct().size == days.size &&
+                days.all { it in allowedDays } &&
                 runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess
         }) { "Habit schedule or reminder time is invalid." }
         require(settings == null || (
@@ -247,7 +249,8 @@ object SparkBackupManager {
     private fun JSONObject.toHabit() = HabitEntity(
         id = requiredLong("id"), title = requiredString("title"), note = optString("note"),
         category = optString("category", "عمومی"), createdAt = requiredLong("createdAt"),
-        scheduledDays = optString("scheduledDays", "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY"),
+        scheduledDays = optString("scheduledDays", "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY")
+            .split(",").map { it.trim().uppercase(java.util.Locale.ROOT) }.filter { it.isNotEmpty() }.distinct().joinToString(","),
         reminderTime = optString("reminderTime", "08:00"), isEnabled = optBoolean("isEnabled", true)
     )
 

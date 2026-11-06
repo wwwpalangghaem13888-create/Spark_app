@@ -52,6 +52,22 @@ class SparkCalculationTest {
         assertEquals(1, calculateHabitStreak(habit, setOf(today.minusDays(2)), today, ZoneId.of("UTC")))
     }
 
+
+    @Test
+    fun habitScheduleNormalizesWhitespaceAndCase() {
+        val date = LocalDate.of(2026, 11, 6) // Friday
+        val habit = HabitEntity(
+            id = 10,
+            title = "Read",
+            note = "",
+            category = "Study",
+            createdAt = date.minusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
+            scheduledDays = " monday, FRIDAY "
+        )
+        assertEquals(true, habit.isScheduledOn(date, ZoneId.of("UTC")))
+        assertEquals(false, habit.isScheduledOn(date.plusDays(1), ZoneId.of("UTC")))
+    }
+
     @Test fun missedTodayDoesNotErasePreviousScheduledStreakUntilDayEnds() {
         val today = LocalDate.of(2026, 11, 6)
         val habit = HabitEntity(

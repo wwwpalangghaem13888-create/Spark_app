@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.room.*
 import androidx.room.migration.Migration
+import kotlinx.coroutines.delay
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -336,6 +337,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val context = LocalContext.current
     var tab by remember { mutableIntStateOf(0) }
     var date by remember { mutableStateOf(LocalDate.now()) }
+    var currentDay by remember { mutableStateOf(LocalDate.now()) }
     var editorOpen by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<HabitEntity?>(null) }
     var taskEditorOpen by remember { mutableStateOf(false) }
@@ -347,32 +349,35 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val taskHistory by db.productivityDao().observeAllTaskHistory().collectAsState(initial = emptyList())
     val habits by dao.observeHabits().collectAsState(initial = emptyList())
     val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
-    val todayLogs by remember { dao.observeLogs(LocalDate.now().toString()) }.collectAsState(initial = emptyList())
+    val todayLogs by remember(currentDay) { dao.observeLogs(currentDay.toString()) }.collectAsState(initial = emptyList())
     val allLogs by dao.observeAllLogs().collectAsState(initial = emptyList())
     val savedSettings by dao.observeSettings().collectAsState(initial = null)
     val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        while (true) {
+            val zone = ZoneId.systemDefault()
+            val nextMidnight = currentDay.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            delay((nextMidnight - System.currentTimeMillis()).coerceAtLeast(1_000L))
+            currentDay = LocalDate.now(zone)
+        }
+    }
+    LaunchedEffect(currentDay, tab) {
+        if (tab == 0) date = currentDay
+    }
     LaunchedEffect(savedSettings) { if (savedSettings == null) dao.saveSettings(UserSettingsEntity()) }
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
-    val streaksByHabit = remember(habits, allLogs) {
+    val streaksByHabit = remember(habits, allLogs, currentDay) {
         habits.associate { habit ->
             val completedDates = allLogs.asSequence()
                 .filter { it.habitId == habit.id && it.isCompleted }
                 .mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
                 .toSet()
-            habit.id to calculateHabitStreak(habit, completedDates, LocalDate.now())
+            habit.id to calculateHabitStreak(habit, completedDates, currentDay)
         }
     }
-    val scheduledHabits = habits.filter { habit ->
-        habit.isEnabled &&
-            !date.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-            date.dayOfWeek.name in habit.scheduledDays.split(",")
-    }
-    val todayHabits = habits.filter { habit ->
-        habit.isEnabled &&
-            !LocalDate.now().isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-            LocalDate.now().dayOfWeek.name in habit.scheduledDays.split(",")
-    }
+    val scheduledHabits = habits.filter { it.isScheduledOn(date) }
+    val todayHabits = habits.filter { it.isScheduledOn(currentDay) }
     val completedCount = done.intersect(scheduledHabits.map { it.id }.toSet()).size
     val progress = calculateCompletionRate(completedCount, scheduledHabits.size)
     Scaffold(containerColor = Ink,
@@ -399,7 +404,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, focusSessions,
+                0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, taskHistory, focusSessions,
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch {
@@ -504,12 +509,11 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
 }
 
 @Composable
-private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, streaks: Map<Long, Int>, reducedMotion: Boolean, tasks: List<TaskEntity>, focusSessions: List<FocusSessionEntity>, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, streaks: Map<Long, Int>, reducedMotion: Boolean, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, focusSessions: List<FocusSessionEntity>, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
     val today = LocalDate.now()
     val tasksDueToday = tasks.filter { it.dueDate == today.toString() }
-    val completedTasksToday = tasks.count { task ->
-        task.completed && task.completedAt?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() == today } == true
-    }
+    val completedTasksToday = countUniqueTaskRewards(taskHistory, today) -
+        countUniqueTaskRewards(taskHistory, today.minusDays(1))
     val focusMinutesToday = focusSessions.filter { Instant.ofEpochMilli(it.startedAt).atZone(ZoneId.systemDefault()).toLocalDate() == today }
         .sumOf { it.actualDurationSeconds.coerceAtLeast(0) } / 60
     val animatedProgress by animateFloatAsState(
@@ -737,8 +741,16 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
     val xpInLevel = xp % 100
     val activeCount = habits.count { it.isEnabled }
     val todayDone = todayLogs.count { it.isCompleted && habits.any { h -> h.id == it.habitId && h.isEnabled } }
-    val todayTaskDone = countUniqueTaskRewards(taskHistory, today) - countUniqueTaskRewards(taskHistory, today.minusDays(1))
-    val todayTaskTarget = tasks.count { it.dueDate == today.toString() }
+    val todayTaskIds = tasks.asSequence()
+        .filter { it.dueDate == today.toString() }
+        .map { it.id }
+        .toSet()
+    val todayTaskDone = taskHistory.asSequence()
+        .filter { it.completed && it.activityDate == today.toString() && it.taskId in todayTaskIds }
+        .map { it.taskId }
+        .distinct()
+        .count()
+    val todayTaskTarget = todayTaskIds.size
     val challengeTarget = minOf(3, activeCount + todayTaskTarget)
     val challengeDone = todayDone + todayTaskDone
     val challengeProgress = if (challengeTarget == 0) 0f else (challengeDone.toFloat() / challengeTarget).coerceIn(0f, 1f)
@@ -749,9 +761,9 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
     val weeklyTarget = 10
     val weeklyProgress = (weeklyDone.toFloat() / weeklyTarget).coerceIn(0f, 1f)
     val milestones = listOf(1 to "اولین جرقه", 10 to "ده قدم", 30 to "پیوستگی", 100 to "صد ثبت موفق")
-    val recentStart = LocalDate.now().minusDays(6)
-    val previousStart = LocalDate.now().minusDays(13)
-    val weekDone = completedLogs.count { runCatching { val d = LocalDate.parse(it.date); d >= recentStart && d <= LocalDate.now() }.getOrDefault(false) }
+    val recentStart = today.minusDays(6)
+    val previousStart = today.minusDays(13)
+    val weekDone = completedLogs.count { runCatching { val d = LocalDate.parse(it.date); d >= recentStart && d <= today }.getOrDefault(false) }
     val previousWeek = completedLogs.count { runCatching { val d = LocalDate.parse(it.date); d >= previousStart && d < recentStart }.getOrDefault(false) }
     val insight = when {
         completedLogs.isEmpty() -> "هنوز داده‌ی کافی برای تحلیل وجود ندارد. چند عادت را ثبت کن تا الگوها قابل بررسی شوند."

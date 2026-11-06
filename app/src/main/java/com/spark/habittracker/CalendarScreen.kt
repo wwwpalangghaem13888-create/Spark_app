@@ -65,9 +65,7 @@ fun SparkCalendarScreen(
     val doneIds = logs.filter { it.date == selectedDate.toString() && it.isCompleted }
         .map { it.habitId }.toSet()
     val dayHabits = habits.filter { habit ->
-        habit.isEnabled &&
-            !selectedDate.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-            selectedDate.dayOfWeek.name in habit.scheduledDays.split(",")
+        habit.isScheduledOn(selectedDate)
     }
     val dayTasks = tasks.filter { it.dueDate == selectedDate.toString() }
     val dates = when (mode) {
@@ -135,9 +133,7 @@ fun SparkCalendarScreen(
                             Spacer(Modifier.weight(1f).size(38.dp))
                         } else {
                             val habitCount = habits.count { habit ->
-                                habit.isEnabled &&
-                                    !date.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-                                    date.dayOfWeek.name in habit.scheduledDays.split(",")
+                                habit.isScheduledOn(date)
                             }
                             val taskCount = tasks.count { it.dueDate == date.toString() }
                             val isSelected = date == selectedDate
