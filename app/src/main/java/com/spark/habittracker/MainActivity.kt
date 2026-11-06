@@ -389,14 +389,23 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
         } },
-        floatingActionButton = { if (tab == 0 || tab == 1) FloatingActionButton(onClick = { if (tab == 1) { editingTask = null; taskEditorOpen = true } else { editing = null; editorOpen = true } }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, if (tab == 1) "افزودن وظیفه" else "افزودن عادت") } }
+        floatingActionButton = { if (tab == 0 || tab == 1 || tab == 2) FloatingActionButton(onClick = {
+            when (tab) {
+                1 -> { editingTask = null; taskEditorOpen = true }
+                2 -> { editingTask = TaskEntity(title = "", dueDate = date.toString()); taskEditorOpen = true }
+                else -> { editing = null; editorOpen = true }
+            }
+        }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, if (tab == 0) "افزودن عادت" else "افزودن وظیفه") } }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, focusSessions,
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
-                    onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
+                    onDelete = { h -> scope.launch {
+                        db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) }
+                        db.productivityDao().deleteRemindersForOwner("HABIT", h.id)
+                    } })
                 1 -> TaskListScreen(
                     tasks = tasks,
                     onToggle = { task, completed -> scope.launch {
