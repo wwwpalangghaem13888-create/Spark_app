@@ -326,6 +326,13 @@ internal fun goalProgressRatio(completedActivities: Int, targetValue: Double): F
     return (completedActivities.coerceAtLeast(0) / targetValue).toFloat().coerceIn(0f, 1f)
 }
 
+internal fun countUniqueTaskRewards(history: List<TaskCompletionEntity>, throughDate: LocalDate): Int =
+    history.asSequence()
+        .filter { it.completed && runCatching { LocalDate.parse(it.activityDate) <= throughDate }.getOrDefault(false) }
+        .map { it.taskId to it.activityDate }
+        .distinct()
+        .count()
+
 /** CSV export uses RFC-4180-style quoting and never writes unescaped user text. */
 internal fun exportTasksCsv(tasks: List<TaskEntity>): String {
     fun cell(value: String?): String {
