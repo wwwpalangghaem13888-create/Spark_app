@@ -38,15 +38,24 @@ interface HabitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveLog(log: HabitLogEntity)
     @Query("DELETE FROM habit_logs WHERE habitId = :id") suspend fun deleteLogs(id: Long)
     @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
+
+    /** The FK cascade and reminder cleanup trigger run in this same transaction. */
+    @Transaction
+    suspend fun deleteHabitAndDependents(id: Long): Int = deleteHabitReturningCount(id)
+
+    @Query("DELETE FROM habits WHERE id = :id")
+    suspend fun deleteHabitReturningCount(id: Long): Int
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 7, exportSchema = false)
+@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = VERSION, exportSchema = false)
 abstract class SparkDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun taskDao(): TaskDao
     abstract fun productivityDao(): ProductivityDao
 
     companion object {
+        const val VERSION = 7
+
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""CREATE TABLE IF NOT EXISTS habits (
