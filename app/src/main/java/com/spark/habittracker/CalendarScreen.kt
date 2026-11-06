@@ -168,7 +168,7 @@ fun SparkCalendarScreen(
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                                .clickable { onToggleHabit(habit, !completed) }.padding(12.dp),
+                                .clickable(enabled = !selectedDate.isAfter(today)) { onToggleHabit(habit, !completed) }.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(if (completed) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = MaterialTheme.colorScheme.primary)
