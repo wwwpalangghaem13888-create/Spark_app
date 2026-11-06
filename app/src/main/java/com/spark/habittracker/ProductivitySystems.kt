@@ -330,7 +330,9 @@ internal fun goalProgressRatio(completedActivities: Int, targetValue: Double): F
 internal fun exportTasksCsv(tasks: List<TaskEntity>): String {
     fun cell(value: String?): String {
         val raw = value.orEmpty()
-        return "\"" + raw.replace("\"", "\"\"") + "\""
+        val first = raw.trimStart().firstOrNull()
+        val spreadsheetSafe = if (first == '=' || first == '+' || first == '-' || first == '@') "'" + raw else raw
+        return "\"" + spreadsheetSafe.replace("\"", "\"\"") + "\""
     }
     return buildString {
         appendLine("id,title,description,category,dueDate,priority,tags,completed,completedAt,archived,startAt,endAt,recurrenceRule")
