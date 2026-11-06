@@ -462,7 +462,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                         editorOpen = true
                     } },
                     onDelete = { h -> scope.launch {
-                        cancelAndDisableReminders(context, db, "HABIT", h.id)
+                        cancelAndDeleteReminders(context, db, "HABIT", h.id)
                         db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) }
                     } })
                 1 -> TaskListScreen(
@@ -482,7 +482,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                         SparkWidgetProvider.refreshAll(context)
                     } },
                     onDelete = { task -> scope.launch {
-                        cancelAndDisableReminders(context, db, "TASK", task.id)
+                        cancelAndDeleteReminders(context, db, "TASK", task.id)
                         taskRepository.deletePermanently(task.id)
                         SparkWidgetProvider.refreshAll(context)
                     } },

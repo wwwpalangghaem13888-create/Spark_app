@@ -133,6 +133,17 @@ internal suspend fun cancelAndDisableReminders(
     dao.disableRemindersForOwner(ownerType, ownerId)
 }
 
+internal suspend fun cancelAndDeleteReminders(
+    context: Context,
+    db: SparkDatabase,
+    ownerType: String,
+    ownerId: Long
+) {
+    val dao = db.productivityDao()
+    dao.getRemindersForOwner(ownerType, ownerId).forEach { ReminderScheduler.cancel(context, it.id) }
+    dao.deleteRemindersForOwner(ownerType, ownerId)
+}
+
 class AlarmRingingService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
