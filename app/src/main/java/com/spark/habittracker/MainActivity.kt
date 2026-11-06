@@ -1053,7 +1053,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
             }
         }
         item {
-            Text("Powered by Ghaem", color = Muted, fontSize = 11.sp, letterSpacing = 1.sp,
+            Text("Built by Ghaem", color = Muted, fontSize = 11.sp, letterSpacing = 1.sp,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
         item {
