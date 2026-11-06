@@ -183,6 +183,18 @@ interface ProductivityDao {
     @Insert
     suspend fun insertGoal(goal: GoalEntity): Long
 
+    @Transaction
+    suspend fun createGoalWithLinks(
+        goal: GoalEntity,
+        taskIds: Set<Long>,
+        habitIds: Set<Long>
+    ): Long {
+        val id = insertGoal(goal)
+        taskIds.forEach { linkTaskToGoal(GoalTaskLinkEntity(id, it)) }
+        habitIds.forEach { linkHabitToGoal(GoalHabitLinkEntity(id, it)) }
+        return id
+    }
+
     @Query("UPDATE goals SET archived = 1, updatedAt = :updatedAt WHERE id = :goalId")
     suspend fun archiveGoal(goalId: Long, updatedAt: Long): Int
 
