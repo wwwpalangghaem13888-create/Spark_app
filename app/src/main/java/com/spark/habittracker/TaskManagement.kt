@@ -32,6 +32,7 @@ data class TaskEntity(
     /** Optional local epoch milliseconds for planned start/end times. */
     val startAt: Long? = null,
     val endAt: Long? = null,
+    val reminderAt: Long? = null,
     /** DAILY, WEEKLY, WEEKDAYS, or MONTHLY; null means one-off. */
     val recurrenceRule: String? = null,
     /** Links generated occurrences to their original recurring task. */
