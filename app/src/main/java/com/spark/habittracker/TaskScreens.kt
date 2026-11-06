@@ -20,6 +20,9 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -272,6 +275,11 @@ fun TaskEditorDialog(
     var description by remember(initial) { mutableStateOf(initial?.description.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
     var dueDate by remember(initial) { mutableStateOf(initial?.dueDate.orEmpty()) }
+    var showDueDatePicker by remember { mutableStateOf(false) }
+    val parsedDueDate = remember(dueDate) { runCatching { LocalDate.parse(dueDate) }.getOrNull() }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = parsedDueDate?.toEpochDay()?.times(86_400_000L)
+    )
     var startAt by remember(initial) { mutableStateOf(initial?.startAt?.let { formatTaskTime(it) }.orEmpty()) }
     var endAt by remember(initial) { mutableStateOf(initial?.endAt?.let { formatTaskTime(it) }.orEmpty()) }
     var reminderAt by remember(initial) { mutableStateOf(initial?.reminderAt?.let { formatTaskTime(it) }.orEmpty()) }
@@ -318,6 +326,35 @@ fun TaskEditorDialog(
     var showAdvanced by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    if (showDueDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDueDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        dueDate = LocalDate.ofEpochDay(millis / 86_400_000L).toString()
+                        error = null
+                    }
+                    showDueDatePicker = false
+                }) { Text(localizedText(language, "تأیید", "Confirm", "تأكيد")) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        dueDate = LocalDate.now().toString()
+                        error = null
+                        showDueDatePicker = false
+                    }) { Text(localizedText(language, "امروز", "Today", "اليوم")) }
+                    TextButton(onClick = { showDueDatePicker = false }) {
+                        Text(localizedText(language, "بستن", "Close", "إغلاق"))
+                    }
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -343,11 +380,33 @@ fun TaskEditorDialog(
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value = dueDate, onValueChange = { dueDate = it; error = null },
-                    label = { Text(localizedText(language, "تاریخ انجام (YYYY-MM-DD)", "Due date (YYYY-MM-DD)", "تاريخ الإنجاز (YYYY-MM-DD)")) },
-                    placeholder = { Text(localizedText(language, "برای کار یک‌باره اختیاری است", "Optional for a one-off task", "اختياري للعمل لمرة واحدة")) },
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                    value = dueDate,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(localizedText(language, "تاریخ انجام", "Due date", "تاريخ الإنجاز")) },
+                    placeholder = { Text(localizedText(language, "برای امروز یا یک تاریخ دیگر انتخاب کن", "Choose today or another date", "اختر اليوم أو تاريخاً آخر")) },
+                    trailingIcon = {
+                        TextButton(onClick = { showDueDatePicker = true }) {
+                            Text(localizedText(language, "انتخاب", "Choose", "اختيار"))
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().clickable { showDueDatePicker = true }
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = dueDate == LocalDate.now().toString(),
+                        onClick = { dueDate = LocalDate.now().toString(); error = null },
+                        label = { Text(localizedText(language, "فقط امروز", "Today", "اليوم")) }
+                    )
+                    if (dueDate.isNotBlank()) {
+                        FilterChip(
+                            selected = false,
+                            onClick = { dueDate = ""; error = null },
+                            label = { Text(localizedText(language, "بدون تاریخ", "No date", "بلا تاريخ")) }
+                        )
+                    }
+                }
 
                 Text(
                     localizedText(language, "این کار چه مدلی است؟", "How should this task repeat?", "كيف تريد تكرار هذا العمل؟"),
