@@ -372,7 +372,9 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
                 1 -> TaskListScreen(
                     tasks = tasks,
-                    onToggle = { task, completed -> scope.launch { taskRepository.setCompleted(task, completed) } },
+                    onToggle = { task, completed -> scope.launch {
+                        db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), LocalDate.now().toString())
+                    } },
                     onEdit = { editingTask = it; taskEditorOpen = true },
                     onArchive = { task -> scope.launch { taskRepository.archive(task.id) } },
                     onDelete = { task -> scope.launch { taskRepository.deletePermanently(task.id) } }
@@ -389,7 +391,9 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                         }
                     },
                     onToggleTask = { task, completed ->
-                        scope.launch { taskRepository.setCompleted(task, completed) }
+                        scope.launch {
+                            db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), date.toString())
+                        }
                     }
                 )
                 3 -> Statistics(habits, allLogs)
