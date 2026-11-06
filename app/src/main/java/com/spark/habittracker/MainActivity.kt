@@ -725,23 +725,21 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
 private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
     val today = LocalDate.now()
     val completedLogs = completedHabitLogsThroughDate(allLogs, today)
-    val taskRewards = taskHistory.filter { it.completed && runCatching { LocalDate.parse(it.activityDate) <= today }.getOrDefault(false) }
-        .map { it.taskId to it.activityDate }.distinct().size
+    val taskRewards = countUniqueTaskRewards(taskHistory, today)
     val totalActivities = completedLogs.size + taskRewards
     val xp = calculateExperience(totalActivities)
     val level = calculateLevel(xp)
     val xpInLevel = xp % 100
     val activeCount = habits.count { it.isEnabled }
     val todayDone = todayLogs.count { it.isCompleted && habits.any { h -> h.id == it.habitId && h.isEnabled } }
-    val todayTaskDone = taskHistory.filter { it.completed && it.activityDate == today.toString() }.map { it.taskId }.distinct().size
+    val todayTaskDone = countUniqueTaskRewards(taskHistory, today) - countUniqueTaskRewards(taskHistory, today.minusDays(1))
     val todayTaskTarget = tasks.count { it.dueDate == today.toString() }
     val challengeTarget = minOf(3, activeCount + todayTaskTarget)
     val challengeDone = todayDone + todayTaskDone
     val challengeProgress = if (challengeTarget == 0) 0f else (challengeDone.toFloat() / challengeTarget).coerceIn(0f, 1f)
     val weekStart = today.minusDays(6)
     val weeklyHabitDone = completedLogs.count { runCatching { val d = LocalDate.parse(it.date); d >= weekStart && d <= today }.getOrDefault(false) }
-    val weeklyTaskDone = taskHistory.filter { it.completed && runCatching { val d = LocalDate.parse(it.activityDate); d >= weekStart && d <= today }.getOrDefault(false) }
-        .map { it.taskId to it.activityDate }.distinct().size
+    val weeklyTaskDone = countUniqueTaskRewards(taskHistory, today) - countUniqueTaskRewards(taskHistory, weekStart.minusDays(1))
     val weeklyDone = weeklyHabitDone + weeklyTaskDone
     val weeklyTarget = 10
     val weeklyProgress = (weeklyDone.toFloat() / weeklyTarget).coerceIn(0f, 1f)
