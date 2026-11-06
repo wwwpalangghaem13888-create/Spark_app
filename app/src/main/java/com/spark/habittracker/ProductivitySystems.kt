@@ -342,19 +342,30 @@ internal fun nextRecurringDate(
     rule: String?,
     from: LocalDate,
     preferredDayOfMonth: Int = from.dayOfMonth
-): LocalDate? = when (rule?.uppercase()) {
-    "DAILY" -> from.plusDays(1)
-    "WEEKLY" -> from.plusWeeks(1)
-    "WEEKDAYS" -> {
-        var next = from.plusDays(1)
-        while (next.dayOfWeek.value > 5) next = next.plusDays(1)
-        next
+): LocalDate? {
+    val normalized = rule?.uppercase() ?: return null
+    return when {
+        normalized == "DAILY" -> from.plusDays(1)
+        normalized == "WEEKLY" -> from.plusWeeks(1)
+        normalized.startsWith("WEEKLY:") -> {
+            val days = normalized.substringAfter("WEEKLY:")
+                .split(",").mapNotNull { value ->
+                    runCatching { java.time.DayOfWeek.valueOf(value.trim()) }.getOrNull()
+                }.toSet()
+            if (days.isEmpty()) null
+            else (1L..7L).asSequence().map(from::plusDays).firstOrNull { it.dayOfWeek in days }
+        }
+        normalized == "WEEKDAYS" -> {
+            var next = from.plusDays(1)
+            while (next.dayOfWeek.value > 5) next = next.plusDays(1)
+            next
+        }
+        normalized == "MONTHLY" -> {
+            val nextMonth = YearMonth.from(from).plusMonths(1)
+            nextMonth.atDay(minOf(preferredDayOfMonth.coerceIn(1, 31), nextMonth.lengthOfMonth()))
+        }
+        else -> null
     }
-    "MONTHLY" -> {
-        val nextMonth = YearMonth.from(from).plusMonths(1)
-        nextMonth.atDay(minOf(preferredDayOfMonth.coerceIn(1, 31), nextMonth.lengthOfMonth()))
-    }
-    else -> null
 }
 
 /** Remaining time is reconstructed from persisted timestamps after process death. */
