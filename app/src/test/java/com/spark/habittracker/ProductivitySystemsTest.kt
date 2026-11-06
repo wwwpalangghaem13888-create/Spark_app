@@ -38,6 +38,47 @@ class ProductivitySystemsTest {
         assertEquals(0f, goalProgressRatio(5, Double.NaN), 0.0001f)
     }
 
+
+    @Test
+    fun analyticsUsesSavedRecordsAndScheduledHabitOpportunities() {
+        val start = LocalDate.parse("2026-11-02")
+        val end = LocalDate.parse("2026-11-03")
+        val habit = HabitEntity(
+            id = 1,
+            title = "Read",
+            note = "",
+            category = "Learning",
+            createdAt = start.atStartOfDay(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli(),
+            scheduledDays = "MONDAY,TUESDAY"
+        )
+        val logs = listOf(
+            HabitLogEntity(habitId = 1, date = "2026-11-02", isCompleted = true),
+            HabitLogEntity(habitId = 1, date = "2026-11-03", isCompleted = false),
+            HabitLogEntity(habitId = 1, date = "2026-11-04", isCompleted = true)
+        )
+        val taskTime = start.atTime(10, 0).atZone(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli()
+        val tasks = listOf(
+            TaskEntity(id = 2, title = "Study", category = "School", completed = true, completedAt = taskTime),
+            TaskEntity(id = 3, title = "Later", category = "School", completed = false)
+        )
+        val sessions = listOf(FocusSessionEntity(startedAt = taskTime, plannedDurationSeconds = 1500, actualDurationSeconds = 900, completed = true))
+        val report = buildAnalyticsReport(habits, logs, tasks, sessions, start, end, java.time.ZoneId.of("UTC"))
+
+        assertEquals(1, report.completedHabits)
+        assertEquals(2, report.scheduledHabitOpportunities)
+        assertEquals(1, report.completedTasks)
+        assertEquals(900L, report.focusSeconds)
+        assertEquals(start, report.bestDay)
+        assertEquals(0.5f, report.habitCompletionRate, 0.0001f)
+        assertEquals(1, report.categoryTaskCounts["School"])
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun analyticsRejectsInvertedDateRange() {
+        buildAnalyticsReport(emptyList(), emptyList(), emptyList(), emptyList(),
+            LocalDate.parse("2026-11-07"), LocalDate.parse("2026-11-06"))
+    }
+
     @Test
     fun csvExportEscapesQuotesAndCommas() {
         val csv = exportTasksCsv(
