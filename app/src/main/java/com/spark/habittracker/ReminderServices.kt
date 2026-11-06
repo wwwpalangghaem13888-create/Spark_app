@@ -17,6 +17,25 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+
+
+internal fun nextHabitReminder(habit: HabitEntity, afterMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): Long? {
+    if (!habit.isEnabled) return null
+    val time = runCatching { LocalTime.parse(habit.reminderTime) }.getOrNull() ?: return null
+    val after = Instant.ofEpochMilli(afterMillis).atZone(zoneId)
+    val scheduled = habit.scheduledDays.split(",").map { it.trim() }.toSet()
+    for (offset in 0L..7L) {
+        val date = after.toLocalDate().plusDays(offset)
+        if (date.dayOfWeek.name !in scheduled) continue
+        val candidate = date.atTime(time).atZone(zoneId)
+        if (candidate.isAfter(after)) return candidate.toInstant().toEpochMilli()
+    }
+    return null
+}
 
 object ReminderScheduler {
     const val ACTION_FIRE = "com.spark.habittracker.REMINDER_FIRE"
@@ -98,7 +117,21 @@ class ReminderReceiver : BroadcastReceiver() {
                         dao.getEnabledReminders().firstOrNull { it.id == reminderId }?.let { ReminderScheduler.schedule(context, it) }
                     } else {
                         val reminder = dao.getEnabledReminders().firstOrNull { it.id == reminderId }
-                        if (reminder != null) ReminderScheduler.show(context, reminder.id, reminder.ownerType)
+                        if (reminder != null) {
+                            ReminderScheduler.show(context, reminder.id, reminder.ownerType)
+                            if (reminder.ownerType == "HABIT") {
+                                val habit = db.habitDao().findHabit(reminder.ownerId)
+                                val next = habit?.let { nextHabitReminder(it, System.currentTimeMillis() + 1000) }
+                                if (next != null) {
+                                    dao.updateReminderTrigger(reminder.id, next)
+                                    ReminderScheduler.schedule(context, reminder.copy(triggerAt = next, snoozedUntil = null))
+                                } else {
+                                    dao.setReminderEnabled(reminder.id, false)
+                                }
+                            } else {
+                                dao.setReminderEnabled(reminder.id, false)
+                            }
+                        }
                     }
                 } finally {
                     db.close()
