@@ -341,7 +341,7 @@ fun TaskEditorDialog(
                 }
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Checkbox(checked = reminderEnabled, onCheckedChange = { reminderEnabled = it; if (!it) reminderAt = "" })
-                    Text("برای این وظیفه یادآوری لازم دارم")
+                    Text("برای این کار یادآوری لازم دارم")
                 }
                 if (reminderEnabled) {
                     OutlinedTextField(

@@ -47,4 +47,27 @@ class TaskManagementTest {
         assertEquals("زیاد", taskPriorityLabel(2))
         assertEquals("فوری", taskPriorityLabel(30))
     }
+    @Test
+    fun recurrenceAcceptsOneOffAndSupportedPresets() {
+        assertTrue(isSupportedTaskRecurrence(null))
+        assertTrue(isSupportedTaskRecurrence("DAILY"))
+        assertTrue(isSupportedTaskRecurrence("WEEKLY"))
+        assertTrue(isSupportedTaskRecurrence("WEEKDAYS"))
+        assertTrue(isSupportedTaskRecurrence("MONTHLY"))
+    }
+
+    @Test
+    fun recurrenceAcceptsExplicitWeeklyDaySelections() {
+        assertTrue(isSupportedTaskRecurrence("WEEKLY:MONDAY,WEDNESDAY,FRIDAY"))
+        assertTrue(isSupportedTaskRecurrence("WEEKLY:SATURDAY"))
+    }
+
+    @Test
+    fun recurrenceRejectsInvalidOrDuplicateWeeklyDays() {
+        assertFalse(isSupportedTaskRecurrence("WEEKLY:"))
+        assertFalse(isSupportedTaskRecurrence("WEEKLY:MONDAY,MONDAY"))
+        assertFalse(isSupportedTaskRecurrence("WEEKLY:FUNDAY"))
+        assertFalse(isSupportedTaskRecurrence("YEARLY"))
+    }
+
 }

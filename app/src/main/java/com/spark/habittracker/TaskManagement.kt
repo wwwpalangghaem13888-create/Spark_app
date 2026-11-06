@@ -114,7 +114,7 @@ class TaskRepository(private val dao: TaskDao) {
         require(normalized.recurrenceRule == null || normalized.dueDate != null) {
             "Recurring tasks require a due date."
         }
-        require(normalized.recurrenceRule == null || normalized.recurrenceRule in setOf("DAILY", "WEEKLY", "WEEKDAYS", "MONTHLY")) {
+        require(isSupportedTaskRecurrence(normalized.recurrenceRule)) {
             "Unsupported recurrence rule."
         }
         return if (normalized.id == 0L) dao.insert(normalized)
@@ -171,4 +171,19 @@ internal fun taskPriorityLabel(priority: Int): String = when (priority.coerceIn(
     2 -> "زیاد"
     3 -> "فوری"
     else -> "معمولی"
+}
+
+
+/** Accepts the supported recurrence presets and explicit weekly day selections. */
+internal fun isSupportedTaskRecurrence(rule: String?): Boolean {
+    if (rule == null || rule in setOf("DAILY", "WEEKLY", "WEEKDAYS", "MONTHLY")) return true
+    if (!rule.startsWith("WEEKLY:")) return false
+    val selectedDays = rule.removePrefix("WEEKLY:")
+        .split(",")
+        .map { it.trim().uppercase(java.util.Locale.ROOT) }
+        .filter { it.isNotEmpty() }
+    val validDays = java.time.DayOfWeek.values().map { it.name }.toSet()
+    return selectedDays.isNotEmpty() &&
+        selectedDays.distinct().size == selectedDays.size &&
+        selectedDays.all { it in validDays }
 }
