@@ -36,6 +36,9 @@ jobs:
       - name: Run unit tests and assemble debug and release APKs
         run: gradle testDebugUnitTest assembleDebug assembleRelease --stacktrace
 
+      - name: Stop Gradle daemons before starting emulator
+        run: gradle --stop
+
       - name: Run database migration instrumentation tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -47,8 +50,8 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 900
           cores: 2
-          ram-size: 4096
-          heap-size: 512
+          ram-size: 2048
+          heap-size: 256
           script: bash .github/scripts/run-instrumentation-tests.sh
 
       - name: Upload instrumentation diagnostics
