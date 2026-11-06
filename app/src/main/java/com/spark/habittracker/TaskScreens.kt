@@ -196,6 +196,7 @@ fun TaskEditorDialog(
     var dueDate by remember(initial) { mutableStateOf(initial?.dueDate.orEmpty()) }
     var startAt by remember(initial) { mutableStateOf(initial?.startAt?.let { formatTaskTime(it) }.orEmpty()) }
     var endAt by remember(initial) { mutableStateOf(initial?.endAt?.let { formatTaskTime(it) }.orEmpty()) }
+    var reminderAt by remember(initial) { mutableStateOf(initial?.reminderAt?.let { formatTaskTime(it) }.orEmpty()) }
     var recurrence by remember(initial) { mutableStateOf(initial?.recurrenceRule) }
     var tags by remember(initial) { mutableStateOf(initial?.tags.orEmpty()) }
     var priority by remember(initial) { mutableIntStateOf(initial?.priority ?: 1) }
@@ -212,6 +213,7 @@ fun TaskEditorDialog(
                 OutlinedTextField(dueDate, { dueDate = it; error = null }, label = { Text("مهلت (YYYY-MM-DD، اختیاری)") }, singleLine = true)
                 OutlinedTextField(startAt, { startAt = it; error = null }, label = { Text("زمان شروع (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
                 OutlinedTextField(endAt, { endAt = it; error = null }, label = { Text("زمان پایان (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
+                OutlinedTextField(reminderAt, { reminderAt = it; error = null }, label = { Text("زمان یادآوری (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
                 Text("تکرار")
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf(null to "هیچ‌کدام", "DAILY" to "روزانه", "WEEKLY" to "هفتگی", "WEEKDAYS" to "روزهای کاری", "MONTHLY" to "ماهانه").forEach { (rule, label) ->
@@ -238,6 +240,8 @@ fun TaskEditorDialog(
                         normalizedDate?.let(LocalDate::parse)
                         val normalizedStart = startAt.trim().ifBlank { null }?.let(::parseTaskTime)
                         val normalizedEnd = endAt.trim().ifBlank { null }?.let(::parseTaskTime)
+                        val normalizedReminder = reminderAt.trim().ifBlank { null }?.let(::parseTaskTime)
+                        require(normalizedReminder == null || normalizedReminder > System.currentTimeMillis()) { "زمان یادآوری باید در آینده باشد." }
                         require(normalizedStart == null || normalizedEnd == null || normalizedEnd > normalizedStart) {
                             "زمان پایان باید بعد از زمان شروع باشد."
                         }
@@ -253,6 +257,7 @@ fun TaskEditorDialog(
                                 dueDate = normalizedDate,
                                 startAt = normalizedStart,
                                 endAt = normalizedEnd,
+                                reminderAt = normalizedReminder,
                                 recurrenceRule = recurrence,
                                 recurrenceParentId = initial?.recurrenceParentId,
                                 priority = priority,
