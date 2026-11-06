@@ -17,6 +17,16 @@ internal fun calculateExperience(completedLogCount: Int): Int =
 internal fun calculateLevel(experience: Int): Int =
     experience.coerceAtLeast(0) / 100 + 1
 
+/** Only completed habit logs through the current local date earn XP. */
+internal fun completedHabitLogsThroughDate(
+    logs: List<HabitLogEntity>,
+    throughDate: java.time.LocalDate
+): List<HabitLogEntity> = logs.filter { log ->
+    log.isCompleted && runCatching {
+        !java.time.LocalDate.parse(log.date).isAfter(throughDate)
+    }.getOrDefault(false)
+}
+
 
 /**
  * Counts consecutive scheduled days completed by a habit.
