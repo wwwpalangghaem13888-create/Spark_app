@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 /**
  * Builds the real v6 on-disk schema, inserts linked user data, then opens it
  * through the production migration registry. This exercises the 6 -> 7 and
- * 7 -> 8 upgrade paths while checking that pre-existing rows survive.
+ * 7 -> 8 and 8 -> 9 upgrade paths while checking that pre-existing rows survive.
  */
 @RunWith(AndroidJUnit4::class)
 class SparkDatabaseMigrationTest {
@@ -36,13 +36,14 @@ class SparkDatabaseMigrationTest {
 
         try {
             val sql = db.openHelper.writableDatabase
-            assertEquals(8, sql.version.toInt())
+            assertEquals(9, sql.version.toInt())
 
             assertEquals(1, db.habitDao().getAllHabits().size)
             assertEquals(1, db.habitDao().getAllLogs().size)
             assertEquals(1, db.taskDao().getAllTasks().size)
             assertEquals(null, db.taskDao().findById(20L)?.repeatRemainingCount)
             assertEquals("fa", db.habitDao().getSettings()?.language)
+            assertEquals("NOTIFICATION", db.habitDao().findHabit(10L)?.reminderMode)
             assertEquals(1, db.productivityDao().getAllSubtasks().size)
             assertEquals(1, db.productivityDao().getAllTaskHistory().size)
             assertEquals(1, db.productivityDao().getAllGoals().size)
