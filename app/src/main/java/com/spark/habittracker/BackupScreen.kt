@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun BackupScreen(db: SparkDatabase, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val language = LocalSparkLanguage.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf("پشتیبان شامل عادت‌ها، سوابق، وظایف، زیرکارها، اهداف، جلسات تمرکز و یادآورهاست.") }
 
@@ -65,7 +66,11 @@ fun BackupScreen(db: SparkDatabase, modifier: Modifier = Modifier) {
             status = try {
                 val count = SparkBackupManager.import(context, db, uri)
                 db.productivityDao().getEnabledReminders()
-                    .forEach { ReminderScheduler.schedule(context, it) }
+                    .forEach { reminder ->
+                        val alarmStyle = reminder.ownerType == "HABIT" &&
+                            db.habitDao().findHabit(reminder.ownerId)?.reminderMode == "ALARM"
+                        ReminderScheduler.schedule(context, reminder, alarmStyle)
+                    }
                 SparkWidgetProvider.refreshAll(context)
                 "بازیابی انجام شد. $count رکورد وارد یا به‌روزرسانی شد."
             } catch (error: Exception) {
@@ -75,31 +80,31 @@ fun BackupScreen(db: SparkDatabase, modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("پشتیبان‌گیری و بازیابی", style = MaterialTheme.typography.headlineSmall)
+        Text(localizedText(language, "پشتیبان‌گیری و بازیابی", "Backup and restore", "النسخ الاحتياطي والاستعادة"), style = MaterialTheme.typography.headlineSmall)
         Card {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("پشتیبان محلی JSON", style = MaterialTheme.typography.titleMedium)
+                Text(localizedText(language, "پشتیبان محلی JSON", "Local JSON backup", "نسخة JSON محلية"), style = MaterialTheme.typography.titleMedium)
                 Text("فایل را در فضای دلخواه ذخیره کن. Spark برای استفادهٔ اصلی به حساب کاربری یا اینترنت نیاز ندارد.")
                 Button(onClick = { exportLauncher.launch("spark-backup.json") }, modifier = Modifier.fillMaxWidth()) {
-                    Text("ساخت پشتیبان")
+                    Text(localizedText(language, "ساخت پشتیبان", "Create backup", "إنشاء نسخة احتياطية"))
                 }
             }
         }
         Card {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("خروجی CSV", style = MaterialTheme.typography.titleMedium)
+                Text(localizedText(language, "خروجی CSV", "CSV export", "تصدير CSV"), style = MaterialTheme.typography.titleMedium)
                 Text("خروجی جدولی وظایف برای استفاده در صفحه‌گسترده‌ها.")
                 Button(onClick = { csvLauncher.launch("spark-tasks.csv") }, modifier = Modifier.fillMaxWidth()) {
-                    Text("ذخیره CSV وظایف")
+                    Text(localizedText(language, "ذخیره CSV وظایف", "Export tasks CSV", "تصدير المهام CSV"))
                 }
             }
         }
         Card {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("بازیابی پشتیبان", style = MaterialTheme.typography.titleMedium)
+                Text(localizedText(language, "بازیابی پشتیبان", "Restore backup", "استعادة نسخة احتياطية"), style = MaterialTheme.typography.titleMedium)
                 Text("بازیابی به‌صورت ادغام انجام می‌شود؛ رکوردهای فعلی پاک نمی‌شوند. نسخه و ارتباط شناسه‌ها پیش از اعمال بررسی می‌شود.")
                 Button(onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("انتخاب فایل پشتیبان")
+                    Text(localizedText(language, "انتخاب فایل پشتیبان", "Choose backup file", "اختر ملف النسخة الاحتياطية"))
                 }
             }
         }
