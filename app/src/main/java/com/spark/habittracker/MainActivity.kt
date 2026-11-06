@@ -676,6 +676,81 @@ private fun Statistics(
             }
         }
     }
+    if (showColorStudio) {
+        CustomAccentDialog(
+            initialAccent = settings.accent,
+            onDismiss = { showColorStudio = false },
+            onSave = { colorHex ->
+                onSettingsChange(settings.copy(accent = colorHex))
+                showColorStudio = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun CustomAccentDialog(initialAccent: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    val initialHsv = remember(initialAccent) {
+        FloatArray(3).also { hsv ->
+            val initialColor = runCatching { AndroidColor.parseColor(initialAccent) }
+                .getOrDefault(AndroidColor.rgb(139, 69, 255))
+            AndroidColor.colorToHSV(initialColor, hsv)
+        }
+    }
+    var hue by remember(initialAccent) { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember(initialAccent) { mutableFloatStateOf(initialHsv[1]) }
+    var brightness by remember(initialAccent) { mutableFloatStateOf(initialHsv[2]) }
+    var hexText by remember(initialAccent) {
+        mutableStateOf(
+            initialAccent.takeIf { it.matches(Regex("^#[0-9A-Fa-f]{6}$")) }
+                ?: String.format("#%06X", 0xFFFFFF and Color.hsv(initialHsv[0], initialHsv[1], initialHsv[2]).toArgb())
+        )
+    }
+    val preview = Color.hsv(hue, saturation, brightness)
+    val generatedHex = String.format("#%06X", 0xFFFFFF and preview.toArgb())
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("استودیو ساخت رنگ", color = White) },
+        containerColor = Panel,
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(preview)
+                )
+                Text("فام رنگ", color = White)
+                Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
+                Text("اشباع", color = White)
+                Slider(value = saturation, onValueChange = { saturation = it }, valueRange = 0f..1f)
+                Text("روشنایی", color = White)
+                Slider(value = brightness, onValueChange = { brightness = it }, valueRange = 0f..1f)
+                OutlinedTextField(
+                    value = hexText,
+                    onValueChange = { value ->
+                        hexText = value.uppercase(Locale.ROOT)
+                        if (hexText.matches(Regex("^#[0-9A-F]{6}$"))) {
+                            runCatching { AndroidColor.parseColor(hexText) }.getOrNull()?.let { parsed ->
+                                val hsv = FloatArray(3)
+                                AndroidColor.colorToHSV(parsed, hsv)
+                                hue = hsv[0]
+                                saturation = hsv[1]
+                                brightness = hsv[2]
+                            }
+                        }
+                    },
+                    label = { Text("کد رنگ HEX") },
+                    supportingText = { Text("نمونه: #7C4DFF") },
+                    singleLine = true
+                )
+                Text("پیش‌نمایش: $generatedHex", color = Muted, fontSize = 11.sp)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(generatedHex) }) { Text("ذخیره رنگ", color = Violet) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("انصراف", color = Muted) }
+        }
+    )
 }
 
 @Composable
@@ -689,6 +764,20 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
 
 @Composable
 private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
+    val context = LocalContext.current
+    var showColorStudio by remember { mutableStateOf(false) }
+    var selectedSoundMode by remember { mutableStateOf(ReminderScheduler.soundMode(context)) }
+    var selectedSoundUri by remember { mutableStateOf(ReminderScheduler.customSoundUri(context)) }
+    val soundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            ReminderScheduler.setSound(context, "CUSTOM", uri)
+            selectedSoundMode = "CUSTOM"
+            selectedSoundUri = uri
+        }
+    }
     val today = LocalDate.now()
     val completedLogs = completedHabitLogsThroughDate(allLogs, today)
     val taskRewards = countUniqueTaskRewards(taskHistory, today)
@@ -829,6 +918,61 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                     listOf("violet" to "بنفش", "cyan" to "فیروزه‌ای", "lime" to "سبز", "pink" to "صورتی").forEach { (key, label) ->
                         FilterChip(selected = settings.accent == key, onClick = { onSettingsChange(settings.copy(accent = key)) }, label = { Text(label) })
                     }
+                }
+                OutlinedButton(onClick = { showColorStudio = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Palette, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("استودیو رنگ دلخواه")
+                }
+
+                Text("زبان برنامه", color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    listOf("fa" to "فارسی", "en" to "English", "ar" to "العربية").forEach { (code, label) ->
+                        FilterChip(
+                            selected = settings.language == code,
+                            onClick = { onSettingsChange(settings.copy(language = code)) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
+                Text("صدای یادآوری", color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    FilterChip(
+                        selected = selectedSoundMode == "DEFAULT",
+                        onClick = {
+                            ReminderScheduler.setSound(context, "DEFAULT")
+                            selectedSoundMode = "DEFAULT"
+                            selectedSoundUri = null
+                        },
+                        label = { Text("صدای دستگاه") }
+                    )
+                    FilterChip(
+                        selected = selectedSoundMode == "SILENT",
+                        onClick = {
+                            ReminderScheduler.setSound(context, "SILENT")
+                            selectedSoundMode = "SILENT"
+                            selectedSoundUri = null
+                        },
+                        label = { Text("بی‌صدا") }
+                    )
+                }
+                OutlinedButton(onClick = { soundPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.LibraryMusic, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (selectedSoundMode == "CUSTOM") "تغییر فایل صدای انتخاب‌شده" else "انتخاب صدا از حافظه")
+                }
+                if (selectedSoundMode == "CUSTOM") {
+                    Text(
+                        selectedSoundUri?.lastPathSegment ?: "فایل صوتی سفارشی انتخاب شده",
+                        color = Muted,
+                        fontSize = 10.sp
+                    )
+                    TextButton(onClick = {
+                        selectedSoundUri?.let { uri ->
+                            runCatching { RingtoneManager.getRingtone(context, uri)?.play() }
+                        }
+                    }) { Text("پخش نمونه صدا") }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
