@@ -65,14 +65,7 @@ class SparkViewModel(
             true
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            _errors.emit(
-                when (error) {
-                    is IllegalArgumentException -> SparkError.Validation
-                    is SecurityException -> SparkError.Permission
-                    is android.database.SQLException -> SparkError.Storage
-                    else -> SparkError.Unexpected
-                }
-            )
+            _errors.emit(error.toSparkError())
             false
         }
     }
