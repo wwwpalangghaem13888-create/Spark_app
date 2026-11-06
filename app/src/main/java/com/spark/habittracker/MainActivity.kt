@@ -1037,7 +1037,7 @@ private fun HabitEditor(
                     }
                 }
             }
-            OutlinedTextField(reminderTime, { reminderTime = it; error = null }, label = { Text("ساعت یادآوری (HH:mm، خالی = بدون یادآور)") }, singleLine = true)
+            OutlinedTextField(reminderTime, { reminderTime = it; error = null }, label = { Text(localizedText(language, "ساعت یادآوری (HH:mm، خالی = بدون یادآور)", "Reminder time (HH:mm, leave blank for none)", "وقت التذكير (HH:mm، اتركه فارغًا لإلغاء التذكير)")) }, singleLine = true)
             ReminderModeSelector(reminderMode, reminderTime.isNotBlank(), language) { reminderMode = it }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
         } },
