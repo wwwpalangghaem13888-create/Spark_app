@@ -146,7 +146,7 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
                 }
                 OutlinedTextField(customMinutes, {
                     customMinutes = it.filter(Char::isDigit)
-                    customMinutes.toLongOrNull()?.takeIf { n -> n in 1..180 }?.let { n -> selectedMinutes = n }
+                    customMinutes.toLongOrNull()?.takeIf { n -> n in 1L..180L }?.let { n -> selectedMinutes = n }
                 }, label = { Text("مدت دلخواه (۱ تا ۱۸۰ دقیقه)") }, singleLine = true)
             }
             Button(onClick = { scope.launch {
