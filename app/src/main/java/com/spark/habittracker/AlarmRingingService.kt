@@ -48,9 +48,12 @@ class AlarmRingingService : Service() {
         startForeground(NOTIFICATION_ID, notification)
 
         if (ringtone?.isPlaying != true) {
-            val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            val alarmUri = ReminderScheduler.customSoundUri(this)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            ringtone = alarmUri?.let { RingtoneManager.getRingtone(this, it) }
+            ringtone = alarmUri?.let { uri ->
+                runCatching { RingtoneManager.getRingtone(this, uri) }.getOrNull()
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ringtone?.isLooping = true
             ringtone?.play()
         }
@@ -62,7 +65,7 @@ class AlarmRingingService : Service() {
             val manager = getSystemService(NotificationManager::class.java)
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
                 manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "زنگ هشدار عادت‌ها", NotificationManager.IMPORTANCE_HIGH)
+                    NotificationChannel(CHANNEL_ID, "زنگ هشدار عادت‌ها", NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null) }
                 )
             }
         }
