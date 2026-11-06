@@ -174,7 +174,7 @@ interface ProductivityDao {
     @Insert
     suspend fun insertReminder(reminder: ReminderEntity): Long
 
-    @Query("SELECT * FROM reminders WHERE enabled = 1 AND (snoozedUntil IS NULL OR snoozedUntil <= :now) ORDER BY triggerAt")
+    @Query("SELECT * FROM reminders WHERE enabled = 1 AND triggerAt <= :now AND (snoozedUntil IS NULL OR snoozedUntil <= :now) ORDER BY triggerAt")
     fun observeDueReminders(now: Long): Flow<List<ReminderEntity>>
 
     @Query("UPDATE reminders SET snoozedUntil = :untilMillis WHERE id = :id")
