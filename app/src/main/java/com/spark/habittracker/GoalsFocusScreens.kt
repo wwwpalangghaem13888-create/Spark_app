@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,16 +107,22 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
 fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
     val session by dao.observeActiveFocusSession().collectAsState(initial = null)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var selectedMinutes by remember { mutableLongStateOf(25L) }
+    var selectedMode by remember { mutableStateOf("FOCUS") }
+    var customMinutes by remember { mutableStateOf("25") }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(session?.id, session?.pausedAt) {
         while (true) { now = System.currentTimeMillis(); delay(1000) }
     }
     val remaining = session?.let { focusRemainingSeconds(it, now) }
-    val minutes = (remaining ?: 0L) / 60
-    val seconds = (remaining ?: 0L) % 60
+    val elapsed = session?.let { focusElapsedSeconds(it, now) } ?: 0L
+    val displaySeconds = if (session?.mode == "STOPWATCH") elapsed else (remaining ?: 0L)
+    val minutes = displaySeconds / 60
+    val seconds = displaySeconds % 60
     val progress = session?.let {
-        if (it.plannedDurationSeconds <= 0) 0f else (1f - (remaining ?: 0L).toFloat() / it.plannedDurationSeconds).coerceIn(0f, 1f)
+        if (it.mode == "STOPWATCH" || it.plannedDurationSeconds <= 0) 0f
+        else (1f - (remaining ?: 0L).toFloat() / it.plannedDurationSeconds).coerceIn(0f, 1f)
     } ?: 0f
 
     Column(modifier = modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
@@ -123,39 +130,73 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
         Text("Spark Focus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("جلسه با زمان واقعی ذخیره می‌شود؛ بستن برنامه تایمر را صفر نمی‌کند.", style = MaterialTheme.typography.bodySmall)
         if (session == null) {
-            Text("مدت تمرکز")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(25L, 50L, 90L).forEach { value ->
-                    FilterChip(selected = selectedMinutes == value, onClick = { selectedMinutes = value }, label = { Text(value.toString() + " دقیقه") })
+            Text("نوع جلسه")
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                listOf("FOCUS" to "تمرکز", "SHORT_BREAK" to "استراحت کوتاه", "LONG_BREAK" to "استراحت بلند", "STOPWATCH" to "کرنومتر").forEach { (key, label) ->
+                    FilterChip(selected = selectedMode == key, onClick = { selectedMode = key }, label = { Text(label) })
                 }
             }
+            if (selectedMode != "STOPWATCH") {
+                Text("مدت جلسه")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (if (selectedMode == "FOCUS") listOf(25L, 50L, 90L) else listOf(5L, 15L)).forEach { value ->
+                        FilterChip(selected = selectedMinutes == value, onClick = { selectedMinutes = value; customMinutes = value.toString() },
+                            label = { Text(value.toString() + " دقیقه") })
+                    }
+                }
+                OutlinedTextField(customMinutes, {
+                    customMinutes = it.filter(Char::isDigit)
+                    customMinutes.toLongOrNull()?.takeIf { n -> n in 1..180 }?.let { n -> selectedMinutes = n }
+                }, label = { Text("مدت دلخواه (۱ تا ۱۸۰ دقیقه)") }, singleLine = true)
+            }
             Button(onClick = { scope.launch {
-                dao.insertFocusSession(FocusSessionEntity(mode = "FOCUS", startedAt = System.currentTimeMillis(),
-                    plannedDurationSeconds = selectedMinutes * 60))
-            } }) { Text("شروع تمرکز") }
+                val start = System.currentTimeMillis()
+                val planned = if (selectedMode == "STOPWATCH") 31_536_000L else selectedMinutes * 60
+                val id = dao.insertFocusSession(FocusSessionEntity(mode = selectedMode, startedAt = start, plannedDurationSeconds = planned))
+                if (selectedMode != "STOPWATCH") {
+                    val reminder = ReminderEntity(ownerType = "FOCUS", ownerId = id, triggerAt = start + planned * 1000)
+                    val reminderId = dao.insertReminder(reminder)
+                    ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                }
+            } }) { Text(if (selectedMode == "STOPWATCH") "شروع کرنومتر" else "شروع جلسه") }
         } else {
             Spacer(Modifier.height(20.dp))
             Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(String.format(Locale.ROOT, "%02d:%02d", minutes, seconds), fontSize = 52.sp, fontWeight = FontWeight.Black)
-                    Text(if (session.pausedAt == null) "در حال تمرکز" else "متوقف‌شده", style = MaterialTheme.typography.titleMedium)
+                    Text(when {
+                        session.mode == "STOPWATCH" -> "کرنومتر"
+                        session.mode == "SHORT_BREAK" -> "استراحت کوتاه"
+                        session.mode == "LONG_BREAK" -> "استراحت بلند"
+                        session.pausedAt != null -> "متوقف‌شده"
+                        else -> "در حال تمرکز"
+                    }, style = MaterialTheme.typography.titleMedium)
                 }
             }
-            LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(10.dp))
+            if (session.mode != "STOPWATCH") LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (session.pausedAt == null) Button(onClick = { scope.launch {
                     dao.updateFocusPause(session.id, now, session.accumulatedPausedSeconds)
+                    dao.disableRemindersForOwner("FOCUS", session.id)
                 } }) { Text("مکث") }
                 else Button(onClick = { scope.launch {
                     val pausedSeconds = ((now - (session.pausedAt ?: now)) / 1000).coerceAtLeast(0)
                     dao.updateFocusPause(session.id, null, session.accumulatedPausedSeconds + pausedSeconds)
+                    val left = if (session.mode == "STOPWATCH") 0L else remaining ?: 0L
+                    if (left > 0) {
+                        dao.deleteRemindersForOwner("FOCUS", session.id)
+                        val reminder = ReminderEntity(ownerType = "FOCUS", ownerId = session.id, triggerAt = now + left * 1000)
+                        val reminderId = dao.insertReminder(reminder)
+                        ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                    }
                 } }) { Text("ادامه") }
                 TextButton(onClick = { scope.launch {
-                    val actual = (session.plannedDurationSeconds - (remaining ?: 0L)).coerceAtLeast(0)
-                    dao.finishFocusSession(session.id, actual, remaining == 0L, now)
+                    val actual = if (session.mode == "STOPWATCH") elapsed else (session.plannedDurationSeconds - (remaining ?: 0L)).coerceAtLeast(0)
+                    dao.finishFocusSession(session.id, actual, session.mode == "STOPWATCH" || remaining == 0L, now)
+                    dao.disableRemindersForOwner("FOCUS", session.id)
                 } }) { Text("پایان جلسه") }
             }
-            if (remaining == 0L) Text("زمان جلسه تمام شد.", color = MaterialTheme.colorScheme.primary)
+            if (session.mode != "STOPWATCH" && remaining == 0L) Text("زمان جلسه تمام شد.", color = MaterialTheme.colorScheme.primary)
         }
     }
 }
