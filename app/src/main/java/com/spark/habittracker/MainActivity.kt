@@ -514,9 +514,7 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
 @Composable
 private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
     val today = LocalDate.now()
-    val completedLogs = allLogs.filter { log ->
-        log.isCompleted && runCatching { !LocalDate.parse(log.date).isAfter(today) }.getOrDefault(false)
-    }
+    val completedLogs = completedHabitLogsThroughDate(allLogs, today)
     val xp = calculateExperience(completedLogs.size)
     val level = calculateLevel(xp)
     val xpInLevel = xp % 100
