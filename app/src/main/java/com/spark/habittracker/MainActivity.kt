@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
@@ -244,9 +245,17 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
         if (light) Color(0xFF626575) else Color(0xFFA9A0C2),
         if (light) Color(0xFF171923) else Color(0xFFF8F5FF)
     )
+    val localizedConfiguration = Configuration(LocalConfiguration.current).apply {
+        setLocale(Locale.forLanguageTag(when (settings.language) {
+            "en" -> "en-US"
+            "ar" -> "ar"
+            else -> "fa-IR"
+        }))
+    }
     CompositionLocalProvider(
         LocalSparkPalette provides palette,
         LocalSparkLanguage provides settings.language,
+        LocalConfiguration provides localizedConfiguration,
         LocalLayoutDirection provides if (settings.language == "en") LayoutDirection.Ltr else LayoutDirection.Rtl
     ) {
         val colors = if (light) lightColorScheme(
