@@ -42,6 +42,23 @@ class SparkViewModel(
         }
     }
 
+    suspend fun saveTask(task: TaskEntity): Long? {
+        return try {
+            tasksRepository.save(task)
+        } catch (error: Throwable) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            _errors.emit(
+                when (error) {
+                    is IllegalArgumentException -> SparkError.Validation
+                    is SecurityException -> SparkError.Permission
+                    is android.database.SQLException -> SparkError.Storage
+                    else -> SparkError.Unexpected
+                }
+            )
+            null
+        }
+    }
+
     suspend fun archive(taskId: Long): Boolean = mutate { tasksRepository.archive(taskId) }
     suspend fun deletePermanently(taskId: Long): Boolean = mutate { tasksRepository.deletePermanently(taskId) }
     suspend fun duplicate(task: TaskEntity): Boolean = mutate { tasksRepository.duplicate(task) }
