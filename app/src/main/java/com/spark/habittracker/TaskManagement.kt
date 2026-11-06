@@ -81,6 +81,12 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE archived = 0 AND completed = 0 ORDER BY CASE WHEN dueDate IS NULL THEN 1 ELSE 0 END, dueDate ASC, priority DESC LIMIT 3")
     suspend fun getWidgetTasks(): List<TaskEntity>
+
+    @Query("SELECT * FROM tasks")
+    suspend fun getAllTasks(): List<TaskEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreTasks(items: List<TaskEntity>)
 }
 
 /** Small repository boundary so UI code does not own task persistence rules. */
