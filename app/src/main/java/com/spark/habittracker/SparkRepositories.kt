@@ -26,8 +26,7 @@ class HabitRepository internal constructor(private val dao: HabitDao) {
     suspend fun record(log: HabitLogEntity) = dao.saveLog(log)
     suspend fun delete(habitId: Long) {
         require(habitId > 0L)
-        dao.deleteLogs(habitId)
-        dao.deleteHabit(habitId)
+        dao.deleteHabitAndDependents(habitId)
     }
 }
 
@@ -51,6 +50,10 @@ class ProductivityRepository internal constructor(private val dao: ProductivityD
     suspend fun createGoal(goal: GoalEntity, taskIds: Set<Long>, habitIds: Set<Long>): Long {
         require(goal.title.isNotBlank()) { "Goal title must not be blank." }
         require(goal.targetValue.isFinite() && goal.targetValue > 0.0) { "Goal target must be positive." }
+        val start = LocalDate.parse(goal.startDate)
+        goal.targetDate?.let {
+            require(!LocalDate.parse(it).isBefore(start)) { "Goal target date cannot be before its start date." }
+        }
         return dao.createGoalWithLinks(goal, taskIds, habitIds)
     }
 
