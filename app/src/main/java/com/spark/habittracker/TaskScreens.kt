@@ -32,6 +32,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +48,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import kotlinx.coroutines.launch
 
 @Composable
 fun TaskListScreen(
@@ -53,8 +56,11 @@ fun TaskListScreen(
     onToggle: (TaskEntity, Boolean) -> Unit,
     onEdit: (TaskEntity) -> Unit,
     onArchive: (TaskEntity) -> Unit,
-    onDelete: (TaskEntity) -> Unit
+    onDelete: (TaskEntity) -> Unit,
+    onDuplicate: (TaskEntity) -> Unit,
+    productivityDao: ProductivityDao
 ) {
+    var selectedSubtaskTaskId by remember { mutableStateOf<Long?>(null) }
     var search by remember { mutableStateOf("") }
     var filter by remember { mutableIntStateOf(0) }
     val today = LocalDate.now()
@@ -114,11 +120,16 @@ fun TaskListScreen(
                         onToggle = { onToggle(task, !task.completed) },
                         onEdit = { onEdit(task) },
                         onArchive = { onArchive(task) },
-                        onDelete = { onDelete(task) }
+                        onDelete = { onDelete(task) },
+                        onDuplicate = { onDuplicate(task) },
+                        onManageSubtasks = { selectedSubtaskTaskId = task.id }
                     )
                 }
             }
         }
+    }
+    selectedSubtaskTaskId?.let { taskId ->
+        TaskSubtasksDialog(taskId, productivityDao, onDismiss = { selectedSubtaskTaskId = null })
     }
 }
 
@@ -128,9 +139,12 @@ private fun TaskCard(
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDuplicate: () -> Unit,
+    onManageSubtasks: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val overdue = taskIsOverdue(task, LocalDate.now())
     Row(
         Modifier.fillMaxWidth().padding(2.dp),
@@ -170,6 +184,14 @@ private fun TaskCard(
                     onClick = { menuOpen = false; onEdit() }
                 )
                 DropdownMenuItem(
+                    text = { Text("زیرکارها") },
+                    onClick = { menuOpen = false; onManageSubtasks() }
+                )
+                DropdownMenuItem(
+                    text = { Text("تکثیر وظیفه") },
+                    onClick = { menuOpen = false; onDuplicate() }
+                )
+                DropdownMenuItem(
                     text = { Text("بایگانی") },
                     leadingIcon = { Icon(Icons.Default.Archive, null) },
                     onClick = { menuOpen = false; onArchive() }
@@ -177,11 +199,54 @@ private fun TaskCard(
                 DropdownMenuItem(
                     text = { Text("حذف دائمی") },
                     leadingIcon = { Icon(Icons.Default.Delete, null) },
-                    onClick = { menuOpen = false; onDelete() }
+                    onClick = { menuOpen = false; confirmDelete = true }
                 )
             }
         }
     }
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text("حذف دائمی وظیفه؟") },
+        text = { Text("این عملیات قابل بازگشت نیست و زیرکارها و تاریخچهٔ وابسته نیز حذف می‌شوند.") },
+        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("حذف") } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("انصراف") } }
+    )
+}
+
+
+@Composable
+private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: () -> Unit) {
+    val subtasks by dao.observeSubtasks(taskId).collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    var title by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("زیرکارهای وظیفه") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(title, { title = it }, label = { Text("عنوان زیرکار") }, singleLine = true)
+                subtasks.forEach { item ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(
+                            checked = item.isCompleted,
+                            onCheckedChange = { checked -> scope.launch { dao.setSubtaskCompleted(item.id, checked) } }
+                        )
+                        Text(item.title, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { scope.launch { dao.deleteSubtask(item.id) } }) { Text("حذف") }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (title.isNotBlank()) scope.launch {
+                    dao.saveSubtask(TaskSubtaskEntity(taskId = taskId, title = title.trim(), position = subtasks.size))
+                    title = ""
+                }
+            }) { Text("افزودن") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("بستن") } }
+    )
 }
 
 @Composable
