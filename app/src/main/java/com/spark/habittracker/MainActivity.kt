@@ -998,14 +998,15 @@ private fun HabitEditor(
     dismiss: () -> Unit,
     save: (String, String, String, String, String) -> Unit
 ) {
+    val language = LocalSparkLanguage.current
     val wheelTextColor = White.toArgb()
     val useLightWheelTheme = wheelTextColor == Color(0xFF171923).toArgb()
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
     val days = listOf(
-        "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
-        "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
+        "MONDAY" to localizedText(language, "دوشنبه", "Monday", "الاثنين"), "TUESDAY" to localizedText(language, "سه‌شنبه", "Tuesday", "الثلاثاء"), "WEDNESDAY" to localizedText(language, "چهارشنبه", "Wednesday", "الأربعاء"),
+        "THURSDAY" to localizedText(language, "پنجشنبه", "Thursday", "الخميس"), "FRIDAY" to localizedText(language, "جمعه", "Friday", "الجمعة"), "SATURDAY" to localizedText(language, "شنبه", "Saturday", "السبت"), "SUNDAY" to localizedText(language, "یکشنبه", "Sunday", "الأحد")
     )
     var selectedDays by remember(initial) {
         mutableStateOf(
@@ -1031,16 +1032,16 @@ private fun HabitEditor(
     AlertDialog(
         onDismissRequest = dismiss,
         containerColor = Panel,
-        title = { Text(if (initial == null) "عادت جدید" else "ویرایش عادت", color = White) },
+        title = { Text(localizedText(language, if (initial == null) "عادت جدید" else "ویرایش عادت", if (initial == null) "New habit" else "Edit habit", if (initial == null) "عادة جديدة" else "تعديل العادة"), color = White) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedTextField(title, { title = it; error = null }, label = { Text("نام عادت") }, singleLine = true)
-                OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
-                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, minLines = 2)
+                OutlinedTextField(title, { title = it; error = null }, label = { Text(localizedText(language, "نام عادت", "Habit name", "اسم العادة")) }, singleLine = true)
+                OutlinedTextField(category, { category = it }, label = { Text(localizedText(language, "دسته‌بندی", "Category", "التصنيف")) }, singleLine = true)
+                OutlinedTextField(note, { note = it }, label = { Text(localizedText(language, "توضیحات (اختیاری)", "Description (optional)", "الوصف (اختياري)")) }, minLines = 2)
 
-                Text("روزهای تکرار عادت", color = White, fontWeight = FontWeight.SemiBold)
+                Text(localizedText(language, "روزهای تکرار عادت", "Repeat days", "أيام التكرار"), color = White, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "عادت برای کارهایی است که مرتب انجام می‌دهی. برای خرید یا کار یک‌باره، از بخش «کارها» استفاده کن.",
+                    localizedText(language, "عادت برای کارهایی است که مرتب انجام می‌دهی. برای خرید یا کار یک‌باره، از بخش «کارها» استفاده کن.", "Habits are for routines. Use Tasks for one-off items such as shopping.", "العادات للأنشطة المتكررة. استخدم المهام للأعمال لمرة واحدة مثل التسوق."),
                     color = Muted, fontSize = 11.sp
                 )
                 days.chunked(4).forEach { group ->
@@ -1071,8 +1072,8 @@ private fun HabitEditor(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("یادآوری ساعت‌دار", color = White)
-                        Text("اختیاری است؛ اگر ساعت انتخاب نکنی، یادآوری تنظیم نمی‌شود.", color = Muted, fontSize = 10.sp)
+                        Text(localizedText(language, "یادآوری ساعت‌دار", "Timed reminder", "تذكير بوقت محدد"), color = White)
+                        Text(localizedText(language, "اختیاری است؛ اگر ساعت انتخاب نکنی، یادآوری تنظیم نمی‌شود.", "Optional. No reminder is scheduled without a selected time.", "اختياري. لن يتم ضبط تذكير دون اختيار وقت."), color = Muted, fontSize = 10.sp)
                     }
                     Switch(
                         checked = reminderEnabled,
@@ -1103,7 +1104,7 @@ private fun HabitEditor(
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(Modifier.weight(1f))
-                        Text("تنظیم", color = Color(0xFF64B5F6), fontSize = 12.sp)
+                        Text(localizedText(language, "تنظیم", "Set time", "ضبط الوقت"), color = Color(0xFF64B5F6), fontSize = 12.sp)
                     }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
@@ -1111,8 +1112,8 @@ private fun HabitEditor(
         },
         confirmButton = {
             TextButton(onClick = {
-                if (title.isBlank()) error = "عنوان نمی‌تواند خالی باشد."
-                else if (selectedDays.isEmpty()) error = "حداقل یک روز برای تکرار عادت انتخاب کن."
+                if (title.isBlank()) error = localizedText(language, "عنوان نمی‌تواند خالی باشد.", "A title is required.", "العنوان مطلوب.")
+                else if (selectedDays.isEmpty()) error = localizedText(language, "حداقل یک روز برای تکرار عادت انتخاب کن.", "Select at least one repeat day.", "اختر يوماً واحداً على الأقل للتكرار.")
                 else {
                     save(
                         title, note, category,
@@ -1120,21 +1121,21 @@ private fun HabitEditor(
                         if (reminderEnabled) selectedTime.orEmpty() else ""
                     )
                 }
-            }) { Text("ذخیره", color = Violet) }
+            }) { Text(localizedText(language, "ذخیره", "Save", "حفظ"), color = Violet) }
         },
-        dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } }
+        dismissButton = { TextButton(onClick = dismiss) { Text(localizedText(language, "انصراف", "Cancel", "إلغاء"), color = Muted) } }
     )
 
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
             containerColor = Panel,
-            title = { Text("انتخاب ساعت یادآوری", color = White) },
+            title = { Text(localizedText(language, "انتخاب ساعت یادآوری", "Choose reminder time", "اختر وقت التذكير"), color = White) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Text("ساعت", color = Muted)
-                        Text("دقیقه", color = Muted)
+                        Text(localizedText(language, "ساعت", "Hour", "الساعة"), color = Muted)
+                        Text(localizedText(language, "دقیقه", "Minute", "الدقيقة"), color = Muted)
                     }
                     AndroidView(
                         modifier = Modifier.fillMaxWidth().height(150.dp),
@@ -1194,10 +1195,10 @@ private fun HabitEditor(
                 TextButton(onClick = {
                     selectedTime = String.format(Locale.ROOT, "%02d:%02d", draftHour, draftMinute)
                     showTimePicker = false
-                }) { Text("تأیید", color = Color(0xFF64B5F6)) }
+                }) { Text(localizedText(language, "تأیید", "Confirm", "تأكيد"), color = Color(0xFF64B5F6)) }
             },
             dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("انصراف", color = Muted) }
+                TextButton(onClick = { showTimePicker = false }) { Text(localizedText(language, "انصراف", "Cancel", "إلغاء"), color = Muted) }
             }
         )
     }
