@@ -43,7 +43,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import java.util.Date
-import java.util.TimeZone
+import android.icu.util.TimeZone
 
 private enum class CalendarMode { DAY, WEEK, MONTH }
 
