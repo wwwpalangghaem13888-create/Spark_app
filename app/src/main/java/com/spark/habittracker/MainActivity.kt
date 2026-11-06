@@ -84,6 +84,28 @@ private val Cyan: Color @Composable get() = LocalSparkPalette.current.secondary
 private val Muted: Color @Composable get() = LocalSparkPalette.current.muted
 private val White: Color @Composable get() = LocalSparkPalette.current.foreground
 
+private fun sparkTabTitles(language: String) = listOf(
+    localizedText(language, "عادت‌های روزانه", "Habits", "العادات"),
+    localizedText(language, "کارها", "Tasks", "المهام"),
+    localizedText(language, "مرور روزها", "Calendar", "التقويم"),
+    localizedText(language, "گزارش عملکرد", "Statistics", "الإحصاءات"),
+    localizedText(language, "سطح و دستاوردها", "Progress", "التقدم"),
+    localizedText(language, "اهداف", "Goals", "الأهداف"),
+    localizedText(language, "تمرکز", "Focus", "التركيز"),
+    localizedText(language, "پشتیبان‌گیری", "Backup", "النسخ الاحتياطي")
+)
+
+private fun sparkNavigationLabels(language: String) = listOf(
+    localizedText(language, "خانه", "Home", "الرئيسية"),
+    localizedText(language, "کارها", "Tasks", "المهام"),
+    localizedText(language, "تقویم", "Calendar", "التقويم"),
+    localizedText(language, "آمار", "Stats", "الإحصاءات"),
+    localizedText(language, "پروفایل", "Profile", "الملف الشخصي"),
+    localizedText(language, "اهداف", "Goals", "الأهداف"),
+    localizedText(language, "تمرکز", "Focus", "التركيز"),
+    localizedText(language, "پشتیبان", "Backup", "النسخ الاحتياطي")
+)
+
 class MainActivity : ComponentActivity() {
     override fun attachBaseContext(newBase: Context) {
         val selectedLanguage = newBase.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
@@ -212,6 +234,10 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
 @Composable
 private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val context = LocalContext.current
+    val taskGuidePrefs = remember(context) {
+        context.getSharedPreferences("spark_task_guide", Context.MODE_PRIVATE)
+    }
+    var showTaskGuide by remember { mutableStateOf(false) }
     val db = container.database
     val habitRepository = container.habitRepository
     val productivityRepository = container.productivityRepository
@@ -239,6 +265,11 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val savedSettings by habitRepository.observeSettings().collectAsState(initial = null)
     val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
+    LaunchedEffect(tab) {
+        if (tab == 1 && !taskGuidePrefs.getBoolean("seen_v1", false)) {
+            showTaskGuide = true
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             val zone = ZoneId.systemDefault()
@@ -270,12 +301,13 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
                 Text("SPARK", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text(listOf("عادت‌های روزانه", "کارها", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها", "اهداف", "تمرکز", "پشتیبان‌گیری")[tab], color = Muted, fontSize = 12.sp)
+                Text(sparkTabTitles(settings.language)[tab], color = Muted, fontSize = 12.sp)
             }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
-            listOf("خانه" to Icons.Default.Home, "کارها" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents, "اهداف" to Icons.Default.Flag, "تمرکز" to Icons.Default.Timer, "پشتیبان" to Icons.Default.Folder).forEachIndexed { i, item ->
-                NavigationBarItem(selected = tab == i, onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
+            val navigationIcons = listOf(Icons.Default.Home, Icons.Default.Checklist, Icons.Default.CalendarMonth, Icons.Default.Insights, Icons.Default.EmojiEvents, Icons.Default.Flag, Icons.Default.Timer, Icons.Default.Folder)
+            sparkNavigationLabels(settings.language).forEachIndexed { i, label ->
+                NavigationBarItem(selected = tab == i, onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() }, icon = { Icon(navigationIcons[i], label) }, label = { Text(label) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
         } },
@@ -347,11 +379,26 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                     }
                 )
                 3 -> Statistics(habits, allLogs, tasks + archivedTasks, taskHistory, focusSessions)
-                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated -> scope.launch { habitRepository.saveSettings(updated) } }
+                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated ->
+                    scope.launch {
+                        habitRepository.saveSettings(updated)
+                        if (updated.language != settings.language) {
+                            context.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
+                                .edit().putString("language", updated.language).apply()
+                            (context as? Activity)?.recreate()
+                        }
+                    }
+                }
                 5 -> GoalsScreen(productivityRepository, tasks, habits)
                 6 -> FocusScreen(productivityRepository)
                 else -> BackupScreen(db)
             }
+        }
+    }
+    if (showTaskGuide) {
+        TaskGuideDialog(language = settings.language) {
+            taskGuidePrefs.edit().putBoolean("seen_v1", true).apply()
+            showTaskGuide = false
         }
     }
     if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category, scheduledDays, reminderTime ->
