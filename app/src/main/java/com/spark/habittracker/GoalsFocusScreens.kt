@@ -56,7 +56,7 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
                     Text(completed.toString() + " از " + goal.targetValue.toInt() + " فعالیت مرتبط", style = MaterialTheme.typography.bodySmall)
                     LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(8.dp))
                     Text((progress * 100).toInt().toString() + "٪ • " + linkedTasks.size + " وظیفه متصل", style = MaterialTheme.typography.labelSmall)
-                    TextButton(onClick = { scope.launch { dao.archiveGoal(goal.id) } }) { Text("بایگانی هدف") }
+                    TextButton(onClick = { scope.launch { dao.archiveGoal(goal.id, System.currentTimeMillis()) } }) { Text("بایگانی هدف") }
                 }
             }
         }
