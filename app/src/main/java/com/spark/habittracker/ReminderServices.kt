@@ -1,0 +1,134 @@
+package com.spark.habittracker
+
+import android.app.AlarmManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.room.Room
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+object ReminderScheduler {
+    const val ACTION_FIRE = "com.spark.habittracker.REMINDER_FIRE"
+    const val ACTION_SNOOZE = "com.spark.habittracker.REMINDER_SNOOZE"
+    private const val CHANNEL_ID = "spark_reminders"
+
+    fun schedule(context: Context, reminder: ReminderEntity) {
+        val intent = Intent(context, ReminderReceiver::class.java)
+            .setAction(ACTION_FIRE)
+            .putExtra("reminder_id", reminder.id)
+            .putExtra("owner_type", reminder.ownerType)
+            .putExtra("owner_id", reminder.ownerId)
+        val pending = PendingIntent.getBroadcast(
+            context, reminder.id.toInt(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.snoozedUntil ?: reminder.triggerAt, pending)
+    }
+
+    fun cancel(context: Context, reminderId: Long) {
+        val intent = Intent(context, ReminderReceiver::class.java).setAction(ACTION_FIRE)
+        val pending = PendingIntent.getBroadcast(
+            context, reminderId.toInt(), intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        ) ?: return
+        (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pending)
+        pending.cancel()
+    }
+
+    fun ensureChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "یادآورهای Spark", NotificationManager.IMPORTANCE_DEFAULT))
+        }
+    }
+
+    internal fun show(context: Context, reminderId: Long, ownerType: String) {
+        ensureChannel(context)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+        val openIntent = PendingIntent.getActivity(
+            context, 900000 + reminderId.toInt(), Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val snoozeIntent = PendingIntent.getBroadcast(
+            context, reminderId.toInt(),
+            Intent(context, ReminderReceiver::class.java).setAction(ACTION_SNOOZE).putExtra("reminder_id", reminderId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.spark_logo)
+            .setContentTitle("یادآوری Spark")
+            .setContentText(if (ownerType == "TASK") "زمان انجام وظیفه‌ات رسیده است." else "یادآوری برنامه‌ریزی‌شده")
+            .setContentIntent(openIntent)
+            .setAutoCancel(true)
+            .addAction(0, "تعویق ۱۰ دقیقه", snoozeIntent)
+            .build()
+        NotificationManagerCompat.from(context).notify(reminderId.toInt(), notification)
+    }
+}
+
+class ReminderReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val reminderId = intent.getLongExtra("reminder_id", -1L)
+        if (reminderId <= 0L) return
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                val db = Room.databaseBuilder(context.applicationContext, SparkDatabase::class.java, "spark_tracker.db")
+                    .addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3,
+                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build()
+                try {
+                    val dao = db.productivityDao()
+                    if (intent.action == ReminderScheduler.ACTION_SNOOZE) {
+                        val until = System.currentTimeMillis() + 10 * 60 * 1000L
+                        dao.snoozeReminder(reminderId, until)
+                        dao.getEnabledReminders().firstOrNull { it.id == reminderId }?.let { ReminderScheduler.schedule(context, it) }
+                    } else {
+                        val reminder = dao.getEnabledReminders().firstOrNull { it.id == reminderId }
+                        if (reminder != null) ReminderScheduler.show(context, reminder.id, reminder.ownerType)
+                    }
+                } finally {
+                    db.close()
+                }
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+}
+
+class SparkBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                val db = Room.databaseBuilder(context.applicationContext, SparkDatabase::class.java, "spark_tracker.db")
+                    .addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3,
+                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build()
+                try {
+                    db.productivityDao().getEnabledReminders()
+                        .filter { (it.snoozedUntil ?: it.triggerAt) > System.currentTimeMillis() }
+                        .forEach { ReminderScheduler.schedule(context, it) }
+                } finally {
+                    db.close()
+                }
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+}
