@@ -545,6 +545,9 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             try {
                 require(title.isNotBlank()) { "blank-title" }
                 require(scheduledDays.split(",").any { it.isNotBlank() }) { "no-scheduled-day" }
+                require(
+                    reminderTime.isBlank() || reminderMode != "ALARM" || canScheduleExactAlarm(context)
+                ) { "exact-alarm-permission" }
                 parseOptionalHabitReminderTime(reminderTime)
                 val normalizedTime = reminderTime.trim()
                 val habit = HabitEntity(
@@ -572,8 +575,11 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                 val message = when {
                     title.isBlank() -> localizedText(settings.language, "عنوان عادت نمی‌تواند خالی باشد.", "Habit title cannot be blank.", "لا يمكن أن يكون عنوان العادة فارغًا.")
                     scheduledDays.split(",").none { it.isNotBlank() } -> localizedText(settings.language, "حداقل یک روز را انتخاب کن.", "Select at least one scheduled day.", "اختر يومًا واحدًا على الأقل.")
-                    reminderTime.isNotBlank() -> localizedText(settings.language, "ساعت یادآوری معتبر نیست؛ از قالب HH:mm استفاده کن.", "Reminder time is invalid; use HH:mm.", "وقت التذكير غير صالح؛ استخدم تنسيق HH:mm.")
-                    else -> localizedText(settings.language, "ذخیره عادت انجام نشد. دوباره تلاش کن.", "The habit could not be saved. Please try again.", "تعذّر حفظ العادة. حاول مرة أخرى.")
+                    reminderTime.isNotBlank() && reminderMode == "ALARM" && !canScheduleExactAlarm(context) ->
+                        localizedText(settings.language, "برای زنگ واقعی، ابتدا دسترسی «هشدارها و یادآورها» را فعال کن.", "Enable exact alarms in Android settings before saving phone-alarm mode.", "فعّل إذن التنبيهات الدقيقة من إعدادات Android قبل حفظ وضع المنبّه.")
+                    reminderTime.isNotBlank() && runCatching { parseOptionalHabitReminderTime(reminderTime) }.isFailure ->
+                        localizedText(settings.language, "ساعت یادآوری معتبر نیست؛ از قالب HH:mm استفاده کن.", "Reminder time is invalid; use HH:mm.", "وقت التذكير غير صالح؛ استخدم تنسيق HH:mm.")
+                    else -> localizedText(settings.language, "ذخیره عادت انجام نشد. دوباره تلاش کن.", "The habit could not be saved. Please try again.", "تعذّر حفظ العادة.")
                 }
                 snackbarHostState.showSnackbar(message)
             }
@@ -587,6 +593,9 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
         onSave = { task, reminderMode ->
             scope.launch {
                 try {
+                    require(
+                        task.reminderAt == null || reminderMode != "ALARM" || canScheduleExactAlarm(context)
+                    ) { "exact-alarm-permission" }
                     val taskId = taskRepository.save(task)
                     cancelAndDisableReminders(context, db, "TASK", taskId)
                     taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
@@ -601,7 +610,11 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     editingTask = null
                 } catch (error: Exception) {
                     snackbarHostState.showSnackbar(
-                        localizedText(settings.language, "ذخیره وظیفه انجام نشد؛ عنوان، تاریخ و زمان را بررسی کن.", "Could not save the task. Check its title, date and time.", "تعذّر حفظ المهمة؛ تحقق من العنوان والتاريخ والوقت.")
+                        if (task.reminderAt != null && reminderMode == "ALARM" && !canScheduleExactAlarm(context)) {
+                            localizedText(settings.language, "برای زنگ واقعی، ابتدا دسترسی «هشدارها و یادآورها» را فعال کن.", "Enable exact alarms in Android settings before saving phone-alarm mode.", "فعّل إذن التنبيهات الدقيقة من إعدادات Android قبل حفظ وضع المنبّه.")
+                        } else {
+                            localizedText(settings.language, "ذخیره وظیفه انجام نشد؛ عنوان، تاریخ و زمان را بررسی کن.", "Could not save the task. Check its title, date and time.", "تعذّر حفظ المهمة؛ تحقق من العنوان والتاريخ والوقت.")
+                        }
                     )
                 }
             }

@@ -158,6 +158,8 @@ object SparkBackupManager {
         }
         db.productivityDao().getEnabledReminders().forEach {
             ReminderScheduler.cancel(context, it.id)
+            // Keep imported ALARM settings intact when Android exact-alarm
+            // access is currently denied; the permission receiver reschedules later.
             ReminderScheduler.schedule(context, it)
         }
         return habits.size + logs.size + tasks.size + subtasks.size + history.size +

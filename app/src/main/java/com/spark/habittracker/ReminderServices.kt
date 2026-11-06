@@ -46,12 +46,25 @@ internal fun nextHabitReminder(habit: HabitEntity, afterMillis: Long, zoneId: Zo
     return null
 }
 
+internal fun canScheduleExactAlarm(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+    val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    return alarm.canScheduleExactAlarms()
+}
+
 object ReminderScheduler {
     const val ACTION_FIRE = "com.spark.habittracker.REMINDER_FIRE"
     const val ACTION_SNOOZE = "com.spark.habittracker.REMINDER_SNOOZE"
+    const val ACTION_EXACT_ALARM_PERMISSION_CHANGED =
+        "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
     private const val CHANNEL_ID = "spark_reminders"
 
-    fun schedule(context: Context, reminder: ReminderEntity) {
+    fun schedule(context: Context, reminder: ReminderEntity): Boolean {
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        // An inexact alarm cannot reliably launch the foreground media service
+        // from the background. Never silently downgrade the phone-alarm mode.
+        if (reminder.mode == "ALARM" && !canScheduleExactAlarm(context)) return false
+
         val intent = Intent(context, ReminderReceiver::class.java)
             .setAction(ACTION_FIRE)
             .putExtra("reminder_id", reminder.id)
@@ -61,11 +74,8 @@ object ReminderScheduler {
             context, reminder.id.toInt(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val triggerAt = reminder.snoozedUntil ?: reminder.triggerAt
-        if (reminder.mode == "ALARM" &&
-            (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarm.canScheduleExactAlarms())
-        ) {
+        if (reminder.mode == "ALARM") {
             val showIntent = PendingIntent.getActivity(
                 context,
                 900000 + reminder.id.toInt(),
@@ -76,6 +86,7 @@ object ReminderScheduler {
         } else {
             alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
         }
+        return true
     }
 
     fun cancel(context: Context, reminderId: Long) {
@@ -314,7 +325,8 @@ class SparkBootReceiver : BroadcastReceiver() {
                 Intent.ACTION_BOOT_COMPLETED,
                 Intent.ACTION_TIME_CHANGED,
                 Intent.ACTION_TIMEZONE_CHANGED,
-                Intent.ACTION_MY_PACKAGE_REPLACED
+                Intent.ACTION_MY_PACKAGE_REPLACED,
+                ReminderScheduler.ACTION_EXACT_ALARM_PERMISSION_CHANGED
             )
         ) return
         val pending = goAsync()
@@ -342,6 +354,8 @@ class SparkBootReceiver : BroadcastReceiver() {
                             scheduledReminder = reminder.copy(triggerAt = next, snoozedUntil = null)
                         }
                         ReminderScheduler.cancel(context, reminder.id)
+                        // A denied exact-alarm permission leaves ALARM records
+                        // persisted; the permission-state broadcast will retry them.
                         ReminderScheduler.schedule(context, scheduledReminder)
                     }
                 } finally {
