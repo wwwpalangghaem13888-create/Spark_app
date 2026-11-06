@@ -111,7 +111,7 @@ fun TaskListScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(Icons.Default.AddTask, contentDescription = null)
-                Text(if (tasks.isEmpty()) "هنوز وظیفه‌ای ثبت نشده." else "موردی با این فیلتر پیدا نشد.")
+                Text(if (sourceTasks.isEmpty()) if (showArchived) "وظیفهٔ بایگانی‌شده‌ای وجود ندارد." else "هنوز وظیفه‌ای ثبت نشده." else "موردی با این فیلتر پیدا نشد.")
                 Text("برای ثبت اولین وظیفه از دکمه افزودن استفاده کن.")
             }
         } else {
@@ -173,7 +173,9 @@ private fun TaskCard(
             val details = listOfNotNull(
                 task.category,
                 taskPriorityLabel(task.priority),
-                task.dueDate?.let { "مهلت: $it" }
+                task.dueDate?.let { "مهلت: $it" },
+                task.startAt?.let { "شروع: " + formatTaskTime(it) },
+                task.endAt?.let { "پایان: " + formatTaskTime(it) }
             ).joinToString(" • ")
             Text(details, style = MaterialTheme.typography.bodySmall)
             if (task.description.isNotBlank()) {
