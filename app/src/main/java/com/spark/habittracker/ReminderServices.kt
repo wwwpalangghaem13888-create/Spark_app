@@ -97,8 +97,9 @@ object ReminderScheduler {
 
     internal fun show(context: Context, reminderId: Long, ownerType: String) {
         ensureChannel(context)
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if ((Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) ||
+            !NotificationManagerCompat.from(context).areNotificationsEnabled()
         ) return
         val openIntent = PendingIntent.getActivity(
             context, 900000 + reminderId.toInt(), Intent(context, MainActivity::class.java),

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,8 +47,9 @@ internal fun ReminderModeSelector(
 ) {
     val context = LocalContext.current
     val notificationsAllowed = remember(context) {
-        Build.VERSION.SDK_INT < 33 ||
+        val runtimePermissionGranted = Build.VERSION.SDK_INT < 33 ||
             context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        runtimePermissionGranted && NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
     val exactAlarmsAllowed = remember(context) {
         Build.VERSION.SDK_INT < 31 ||
