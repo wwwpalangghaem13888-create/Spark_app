@@ -301,7 +301,7 @@ abstract class SparkDatabase : RoomDatabase() {
                 db.execSQL("""
                     CREATE TRIGGER reminders_validate_insert
                     BEFORE INSERT ON reminders
-                    WHEN NOT (
+                    WHEN NEW.enabled = 1 AND NOT (
                         (NEW.ownerType = 'TASK' AND EXISTS (SELECT 1 FROM tasks WHERE id = NEW.ownerId)) OR
                         (NEW.ownerType = 'HABIT' AND EXISTS (SELECT 1 FROM habits WHERE id = NEW.ownerId)) OR
                         (NEW.ownerType = 'FOCUS' AND EXISTS (SELECT 1 FROM focus_sessions WHERE id = NEW.ownerId))
@@ -312,8 +312,8 @@ abstract class SparkDatabase : RoomDatabase() {
                 """)
                 db.execSQL("""
                     CREATE TRIGGER reminders_validate_update
-                    BEFORE UPDATE OF ownerType, ownerId ON reminders
-                    WHEN NOT (
+                    BEFORE UPDATE OF ownerType, ownerId, enabled ON reminders
+                    WHEN NEW.enabled = 1 AND NOT (
                         (NEW.ownerType = 'TASK' AND EXISTS (SELECT 1 FROM tasks WHERE id = NEW.ownerId)) OR
                         (NEW.ownerType = 'HABIT' AND EXISTS (SELECT 1 FROM habits WHERE id = NEW.ownerId)) OR
                         (NEW.ownerType = 'FOCUS' AND EXISTS (SELECT 1 FROM focus_sessions WHERE id = NEW.ownerId))
