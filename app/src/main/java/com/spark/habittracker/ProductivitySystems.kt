@@ -494,4 +494,3 @@ class GoalProgressRepository(private val dao: ProductivityDao) {
         return GoalProgress(completed, goal.targetValue, goalProgressRatio(completed, goal.targetValue))
     }
 }
-}
