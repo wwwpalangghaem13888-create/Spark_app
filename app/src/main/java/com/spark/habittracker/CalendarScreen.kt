@@ -60,8 +60,15 @@ fun SparkCalendarScreen(
     val language = LocalSparkLanguage.current
     var modeIndex by remember { mutableIntStateOf(2) }
     val mode = CalendarMode.entries[modeIndex]
-    val locale = Locale("fa")
-    val monthLabel = remember(selectedDate) { persianDateLabel(selectedDate, "MMMM yyyy") }
+    val locale = when (language) {
+        "en" -> Locale.US
+        "ar" -> Locale.forLanguageTag("ar")
+        else -> Locale("fa")
+    }
+    fun dateLabel(date: LocalDate, pattern: String): String =
+        if (language == "fa") persianDateLabel(date, pattern)
+        else date.format(DateTimeFormatter.ofPattern(pattern, locale))
+    val monthLabel = remember(selectedDate, language) { dateLabel(selectedDate, "MMMM yyyy") }
     val today = LocalDate.now()
     val doneIds = logs.filter { it.date == selectedDate.toString() && it.isCompleted }
         .map { it.habitId }.toSet()
@@ -103,10 +110,10 @@ fun SparkCalendarScreen(
                     CalendarMode.WEEK -> selectedDate.minusWeeks(1)
                     CalendarMode.MONTH -> selectedDate.minusMonths(1)
                 })
-            }) { Icon(Icons.Default.ChevronRight, contentDescription = "بازه قبل") }
+            }) { Icon(Icons.Default.ChevronRight, contentDescription = localizedText(language, "بازه قبل", "Previous period", "الفترة السابقة")) }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (mode == CalendarMode.MONTH) monthLabel else persianDateLabel(selectedDate, "d MMMM yyyy"), style = MaterialTheme.typography.titleMedium)
-                Text(if (selectedDate == today) "امروز" else selectedDate.dayOfWeek.getDisplayName(TextStyle.FULL, locale), style = MaterialTheme.typography.bodySmall)
+                Text(if (mode == CalendarMode.MONTH) monthLabel else dateLabel(selectedDate, "d MMMM yyyy"), style = MaterialTheme.typography.titleMedium)
+                Text(if (selectedDate == today) localizedText(language, "امروز", "Today", "اليوم") else selectedDate.dayOfWeek.getDisplayName(TextStyle.FULL, locale), style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = {
                 onDateChange(when (mode) {
@@ -114,7 +121,7 @@ fun SparkCalendarScreen(
                     CalendarMode.WEEK -> selectedDate.plusWeeks(1)
                     CalendarMode.MONTH -> selectedDate.plusMonths(1)
                 })
-            }) { Icon(Icons.Default.ChevronLeft, contentDescription = "بازه بعد") }
+            }) { Icon(Icons.Default.ChevronLeft, contentDescription = localizedText(language, "بازه بعد", "Next period", "الفترة التالية")) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(localizedText(language, "روز", "Day", "يوم"), localizedText(language, "هفته", "Week", "أسبوع"), localizedText(language, "ماه", "Month", "شهر")).forEachIndexed { index, label ->
@@ -123,7 +130,7 @@ fun SparkCalendarScreen(
         }
         if (mode != CalendarMode.DAY) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEach {
+                (when (language) { "en" -> listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"); "ar" -> listOf("أح", "اث", "ثل", "أر", "خم", "جم", "سب"); else -> listOf("ش", "ی", "د", "س", "چ", "پ", "ج") }).forEach {
                     Text(it, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
                 }
             }
@@ -156,9 +163,9 @@ fun SparkCalendarScreen(
                 }
             }
         }
-        Text("برنامه " + persianDateLabel(selectedDate, "d MMMM yyyy"), style = MaterialTheme.typography.titleMedium)
+        Text(localizedText(language, "برنامه ", "Schedule: ", "الجدول: ") + dateLabel(selectedDate, "d MMMM yyyy"), style = MaterialTheme.typography.titleMedium)
         if (dayHabits.isEmpty() && dayTasks.isEmpty()) {
-            Text("برای این روز برنامه‌ای ثبت نشده است.", style = MaterialTheme.typography.bodyMedium)
+            Text(localizedText(language, "برای این روز برنامه‌ای ثبت نشده است.", "Nothing is scheduled for this day.", "لا يوجد شيء مجدول لهذا اليوم."), style = MaterialTheme.typography.bodyMedium)
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(dayHabits.size + dayTasks.size) { index ->
@@ -173,7 +180,7 @@ fun SparkCalendarScreen(
                         ) {
                             Icon(if (completed) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = MaterialTheme.colorScheme.primary)
                             Text(habit.title, Modifier.weight(1f).padding(start = 10.dp))
-                            Text("عادت", style = MaterialTheme.typography.labelSmall)
+                            Text(localizedText(language, "عادت", "Habit", "عادة"), style = MaterialTheme.typography.labelSmall)
                         }
                     } else {
                         val task = dayTasks[index - dayHabits.size]
@@ -185,7 +192,7 @@ fun SparkCalendarScreen(
                         ) {
                             Icon(if (task.completed) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = MaterialTheme.colorScheme.primary)
                             Text(task.title, Modifier.weight(1f).padding(start = 10.dp))
-                            Text("وظیفه", style = MaterialTheme.typography.labelSmall)
+                            Text(localizedText(language, "کار", "Task", "مهمة"), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
