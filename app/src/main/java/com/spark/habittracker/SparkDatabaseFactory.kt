@@ -22,7 +22,8 @@ internal object SparkDatabaseFactory {
         SparkDatabase.MIGRATION_3_4,
         SparkDatabase.MIGRATION_4_5,
         SparkDatabase.MIGRATION_5_6,
-        SparkDatabase.MIGRATION_6_7
+        SparkDatabase.MIGRATION_6_7,
+        SparkDatabase.MIGRATION_7_8
     )
 
     fun create(context: Context): SparkDatabase =

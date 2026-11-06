@@ -18,7 +18,13 @@ data class HabitEntity(
 data class HabitLogEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val habitId: Long, val date: String, val isCompleted: Boolean, val completionTimestamp: Long = System.currentTimeMillis())
 
 @Entity(tableName = "user_settings")
-data class UserSettingsEntity(@PrimaryKey val id: Int = 1, val theme: String = "neon", val accent: String = "violet", val reducedMotion: Boolean = false)
+data class UserSettingsEntity(
+    @PrimaryKey val id: Int = 1,
+    val theme: String = "neon",
+    val accent: String = "violet",
+    val reducedMotion: Boolean = false,
+    val language: String = "fa"
+)
 
 @Dao
 interface HabitDao {
@@ -45,14 +51,14 @@ interface HabitDao {
     suspend fun deleteHabit(id: Long): Int
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 7, exportSchema = false)
+@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 8, exportSchema = false)
 abstract class SparkDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun taskDao(): TaskDao
     abstract fun productivityDao(): ProductivityDao
 
     companion object {
-        const val VERSION = 7
+        const val VERSION = 8
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -344,6 +350,17 @@ abstract class SparkDatabase : RoomDatabase() {
                         DELETE FROM reminders WHERE ownerType = 'FOCUS' AND ownerId = OLD.id;
                     END
                 """)
+            }
+        }
+        /**
+         * Version 8 adds finite recurrence state and the app language preference.
+         * Both fields are appended with backward-compatible defaults; existing tasks
+         * remain unlimited when they already use a recurrence rule.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN repeatRemainingCount INTEGER")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN language TEXT NOT NULL DEFAULT 'fa'")
             }
         }
     }

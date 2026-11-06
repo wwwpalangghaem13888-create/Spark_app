@@ -63,6 +63,21 @@ class TaskManagementTest {
     }
 
     @Test
+    fun finiteRecurrenceStopsAfterConfiguredOccurrences() {
+        val limited = TaskEntity(
+            id = 9,
+            title = "Buy vegetables",
+            dueDate = "2026-11-07",
+            recurrenceRule = "WEEKLY:SATURDAY",
+            repeatRemainingCount = 2
+        )
+        assertTrue(hasRemainingTaskOccurrences(limited))
+        assertTrue(hasRemainingTaskOccurrences(limited.copy(repeatRemainingCount = 1)))
+        assertFalse(hasRemainingTaskOccurrences(limited.copy(repeatRemainingCount = 0)))
+        assertTrue(hasRemainingTaskOccurrences(limited.copy(repeatRemainingCount = null)))
+    }
+
+    @Test
     fun recurrenceRejectsInvalidOrDuplicateWeeklyDays() {
         assertFalse(isSupportedTaskRecurrence("WEEKLY:"))
         assertFalse(isSupportedTaskRecurrence("WEEKLY:MONDAY,MONDAY"))
