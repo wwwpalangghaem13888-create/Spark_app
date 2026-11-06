@@ -7,6 +7,10 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+concurrency:
+  group: spark-android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
