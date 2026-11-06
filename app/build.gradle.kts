@@ -4,6 +4,17 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val releaseKeystorePath = System.getenv("ANDROID_SIGNING_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("ANDROID_SIGNING_STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_SIGNING_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_SIGNING_KEY_PASSWORD")
+val hasStableReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.spark.habittracker"
     compileSdk = 36
@@ -12,9 +23,20 @@ android {
         applicationId = "com.spark.habittracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "5.0.0"
+        versionCode = 6
+        versionName = "5.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    if (hasStableReleaseSigning) {
+        signingConfigs {
+            create("stableRelease") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildFeatures { compose = true }
@@ -30,6 +52,9 @@ android {
 
     buildTypes {
         getByName("release") {
+            if (hasStableReleaseSigning) {
+                signingConfig = signingConfigs.getByName("stableRelease")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
