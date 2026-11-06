@@ -601,6 +601,42 @@ fun TaskEditorDialog(
 }
 
 @Composable
+@Composable
+fun AppGuideDialog(language: String, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = {
+            Text(localizedText(language, "به SPARK خوش آمدی", "Welcome to SPARK", "مرحباً بك في SPARK"))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(localizedText(
+                    language,
+                    "SPARK کمک می‌کند کارها و عادت‌هایت را مرتب کنی؛ قرار نیست مدیریت روزت را سخت‌تر کند.",
+                    "SPARK helps you organize habits and tasks without making your day harder to manage.",
+                    "يساعدك SPARK على تنظيم عاداتك ومهامك دون تعقيد يومك."
+                ))
+                Text(localizedText(language, "۱. عادت‌ها: کارهایی که مرتب انجام می‌دهی؛ مثل ورزش یا مطالعه.", "1. Habits: routines you repeat, such as exercise or reading.", "١. العادات: أنشطة متكررة مثل الرياضة أو القراءة."))
+                Text(localizedText(language, "۲. کارها: خرید، قرارها و کارهای یک‌باره یا زمان‌دار.", "2. Tasks: shopping, appointments and one-off or scheduled work.", "٢. المهام: التسوق والمواعيد والأعمال لمرة واحدة أو المجدولة."))
+                Text(localizedText(language, "۳. تقویم: برنامه و فعالیت‌هایت را در روزهای مختلف ببین.", "3. Calendar: review your activity across days.", "٣. التقويم: راجع أنشطتك عبر الأيام."))
+                Text(localizedText(language, "۴. آمار و پیشرفت: روند انجام کارها و عادت‌هایت را دنبال کن.", "4. Statistics and Progress: track how your habits and tasks are going.", "٤. الإحصاءات والتقدم: تابع إنجاز عاداتك ومهامك."))
+                Text(localizedText(language, "۵. اهداف و تمرکز: برای مسیرت هدف بگذار و زمان تمرکز را ثبت کن.", "5. Goals and Focus: set targets and track focused time.", "٥. الأهداف والتركيز: حدد أهدافك وسجل وقت التركيز."))
+                Text(localizedText(language, "از بخش بیشتر به پشتیبان‌گیری و تنظیمات هم دسترسی داری. هر زمان خواستی، زبان و ظاهر برنامه را تغییر بده.", "Use More to find backup and settings. You can change the language and appearance whenever you like.", "استخدم «المزيد» للوصول إلى النسخ الاحتياطي والإعدادات. يمكنك تغيير اللغة والمظهر متى شئت."))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "شروع کنیم", "Let's start", "لنبدأ"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "رد کردن راهنما", "Skip guide", "تخطي الدليل"))
+            }
+        }
+    )
+}
+
 fun TaskGuideDialog(language: String, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
