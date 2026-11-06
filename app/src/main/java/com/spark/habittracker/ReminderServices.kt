@@ -146,7 +146,6 @@ internal suspend fun cancelAndDeleteReminders(
 
 class AlarmRingingService : Service() {
     private var mediaPlayer: MediaPlayer? = null
-    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -184,6 +183,7 @@ class AlarmRingingService : Service() {
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
         if (alarmUri != null) {
             mediaPlayer = MediaPlayer().apply {
+                setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
@@ -196,12 +196,6 @@ class AlarmRingingService : Service() {
                 start()
             }
         }
-        if (wakeLock?.isHeld != true) {
-            wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:SparkAlarm").apply {
-                    acquire(10 * 60 * 1000L)
-                }
-        }
         return START_STICKY
     }
 
@@ -211,8 +205,6 @@ class AlarmRingingService : Service() {
             release()
         }
         mediaPlayer = null
-        wakeLock?.let { if (it.isHeld) it.release() }
-        wakeLock = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
