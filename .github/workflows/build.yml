@@ -36,6 +36,15 @@ jobs:
       - name: Run unit tests and assemble debug and release APKs
         run: gradle testDebugUnitTest assembleDebug assembleRelease --stacktrace
 
+      - name: Run database migration instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: Pixel_2
+          script: gradle connectedDebugAndroidTest --stacktrace
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
