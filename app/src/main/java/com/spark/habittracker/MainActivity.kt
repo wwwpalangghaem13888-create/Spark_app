@@ -265,6 +265,10 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val taskGuidePrefs = remember(context) {
         context.getSharedPreferences("spark_task_guide", Context.MODE_PRIVATE)
     }
+    val appGuidePrefs = remember(context) {
+        context.getSharedPreferences("spark_app_guide", Context.MODE_PRIVATE)
+    }
+    var showAppGuide by remember { mutableStateOf(false) }
     var showTaskGuide by remember { mutableStateOf(false) }
     val db = container.database
     val habitRepository = container.habitRepository
@@ -294,6 +298,9 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val savedSettings by habitRepository.observeSettings().collectAsState(initial = null)
     val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        if (!appGuidePrefs.getBoolean("seen_v1", false)) showAppGuide = true
+    }
     LaunchedEffect(tab) {
         if (tab == 1 && !taskGuidePrefs.getBoolean("seen_v1", false)) {
             showTaskGuide = true
@@ -453,6 +460,12 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                 6 -> FocusScreen(productivityRepository)
                 else -> BackupScreen(db)
             }
+        }
+    }
+    if (showAppGuide) {
+        AppGuideDialog(language = settings.language) {
+            appGuidePrefs.edit().putBoolean("seen_v1", true).apply()
+            showAppGuide = false
         }
     }
     if (showTaskGuide) {
