@@ -1,5 +1,7 @@
 package com.spark.habittracker
 import android.os.Bundle
+import android.os.Build
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -281,6 +284,10 @@ class MainActivity : ComponentActivity() {
     private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3, SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ReminderScheduler.ensureChannel(this)
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+        }
         setContent {
             val settings by db.habitDao().observeSettings().collectAsState(initial = null)
             SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(db.habitDao(), db) }
@@ -315,6 +322,7 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
+    val context = LocalContext.current
     var tab by remember { mutableIntStateOf(0) }
     var date by remember { mutableStateOf(LocalDate.now()) }
     var editorOpen by remember { mutableStateOf(false) }
@@ -426,7 +434,14 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
         onDismiss = { taskEditorOpen = false; editingTask = null },
         onSave = { task ->
             scope.launch {
-                taskRepository.save(task)
+                val taskId = taskRepository.save(task)
+                db.productivityDao().deleteRemindersForOwner("TASK", taskId)
+                task.reminderAt?.let { triggerAt ->
+                    val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
+                    val reminderId = db.productivityDao().insertReminder(reminder)
+                    ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                }
+                SparkWidgetProvider.refreshAll(context)
                 taskEditorOpen = false
                 editingTask = null
             }
