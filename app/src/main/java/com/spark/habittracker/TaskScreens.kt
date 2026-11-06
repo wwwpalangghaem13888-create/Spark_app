@@ -2,6 +2,7 @@ package com.spark.habittracker
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -157,7 +158,7 @@ private fun TaskCard(
             if (overdue) Text("عقب‌افتاده", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
             if (task.tags.isNotBlank()) Text(task.tags, style = MaterialTheme.typography.labelSmall)
         }
-        androidx.compose.material3.Box {
+        Box {
             TextButton(onClick = { menuOpen = true }) { Text("•••") }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
