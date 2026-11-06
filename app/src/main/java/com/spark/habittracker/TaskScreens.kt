@@ -58,13 +58,17 @@ fun TaskListScreen(
     onArchive: (TaskEntity) -> Unit,
     onDelete: (TaskEntity) -> Unit,
     onDuplicate: (TaskEntity) -> Unit,
+    onRestore: (TaskEntity) -> Unit,
+    archivedTasks: List<TaskEntity>,
     productivityDao: ProductivityDao
 ) {
+    var showArchived by remember { mutableStateOf(false) }
     var selectedSubtaskTaskId by remember { mutableStateOf<Long?>(null) }
     var search by remember { mutableStateOf("") }
     var filter by remember { mutableIntStateOf(0) }
     val today = LocalDate.now()
-    val visible = tasks.filter { task ->
+    val sourceTasks = if (showArchived) archivedTasks else tasks
+    val visible = sourceTasks.filter { task ->
         val matchesText = search.isBlank() ||
             task.title.contains(search, ignoreCase = true) ||
             task.description.contains(search, ignoreCase = true) ||
@@ -99,6 +103,7 @@ fun TaskListScreen(
                     label = { Text(label) }
                 )
             }
+            FilterChip(selected = showArchived, onClick = { showArchived = !showArchived }, label = { Text(if (showArchived) "نمایش فعال‌ها" else "بایگانی") })
         }
         if (visible.isEmpty()) {
             Column(
@@ -122,7 +127,8 @@ fun TaskListScreen(
                         onArchive = { onArchive(task) },
                         onDelete = { onDelete(task) },
                         onDuplicate = { onDuplicate(task) },
-                        onManageSubtasks = { selectedSubtaskTaskId = task.id }
+                        onManageSubtasks = { selectedSubtaskTaskId = task.id },
+                        onRestore = { onRestore(task) }
                     )
                 }
             }
@@ -141,7 +147,8 @@ private fun TaskCard(
     onArchive: () -> Unit,
     onDelete: () -> Unit,
     onDuplicate: () -> Unit,
-    onManageSubtasks: () -> Unit
+    onManageSubtasks: () -> Unit,
+    onRestore: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -192,9 +199,9 @@ private fun TaskCard(
                     onClick = { menuOpen = false; onDuplicate() }
                 )
                 DropdownMenuItem(
-                    text = { Text("بایگانی") },
+                    text = { Text(if (task.archived) "بازیابی از بایگانی" else "بایگانی") },
                     leadingIcon = { Icon(Icons.Default.Archive, null) },
-                    onClick = { menuOpen = false; onArchive() }
+                    onClick = { menuOpen = false; if (task.archived) onRestore() else onArchive() }
                 )
                 DropdownMenuItem(
                     text = { Text("حذف دائمی") },
