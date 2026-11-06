@@ -113,7 +113,8 @@ object SparkBackupManager {
             val days = rawDays.filter(String::isNotEmpty)
             days.isNotEmpty() && days.size == rawDays.size && days.distinct().size == days.size &&
                 days.all { it in allowedDays } &&
-                (habit.reminderTime.isBlank() || runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess)
+                (habit.reminderTime.isBlank() || runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess) &&
+                habit.reminderMode in setOf("NOTIFICATION", "ALARM")
         }) { "Habit schedule or reminder time is invalid." }
         require(settings == null || (
             settings.id == 1 &&
