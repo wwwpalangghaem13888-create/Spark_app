@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "com.spark.habittracker"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.spark.habittracker"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 5
         versionName = "5.0.0"
     }
@@ -26,6 +26,16 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
 }
 
 dependencies {
