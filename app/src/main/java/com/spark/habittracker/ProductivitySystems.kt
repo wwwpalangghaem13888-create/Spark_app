@@ -202,18 +202,32 @@ interface ProductivityDao {
     suspend fun linkedHabitIds(goalId: Long): List<Long>
 
     @Query("""
-        SELECT COUNT(*) FROM (
-            SELECT h.taskId, h.activityDate
-            FROM task_completion_history AS h
-            INNER JOIN goal_task_links AS l ON l.taskId = h.taskId
-            WHERE l.goalId = :goalId
-              AND h.completed = 1
-              AND h.activityDate >= :startDate
-              AND h.activityDate <= :endDate
-            GROUP BY h.taskId, h.activityDate
-        ) AS completed_task_days
+        SELECT
+            (SELECT COUNT(*) FROM (
+                SELECT h.taskId, h.activityDate
+                FROM task_completion_history AS h
+                INNER JOIN goal_task_links AS l ON l.taskId = h.taskId
+                WHERE l.goalId = :goalId
+                  AND h.completed = 1
+                  AND h.activityDate >= :startDate
+                  AND h.activityDate <= :endDate
+                GROUP BY h.taskId, h.activityDate
+            ) AS completed_task_days)
+            +
+            (SELECT COUNT(*) FROM tasks AS t
+                INNER JOIN goal_task_links AS l ON l.taskId = t.id
+                WHERE l.goalId = :goalId
+                  AND t.completed = 1
+                  AND t.completedAt >= :startMillis
+                  AND t.completedAt <= :endMillis
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_completion_history AS h
+                      WHERE h.taskId = t.id AND h.completed = 1
+                  ))
     """)
-    suspend fun completedLinkedTasks(goalId: Long, startDate: String, endDate: String): Int
+    suspend fun completedLinkedTasks(
+        goalId: Long, startDate: String, endDate: String, startMillis: Long, endMillis: Long
+    ): Int
 
     @Query("SELECT COUNT(*) FROM habit_logs WHERE habitId IN (SELECT habitId FROM goal_habit_links WHERE goalId = :goalId) AND isCompleted = 1 AND date >= :startDate AND date <= :endDate")
     suspend fun completedLinkedHabits(goalId: Long, startDate: String, endDate: String): Int
@@ -460,9 +474,18 @@ data class GoalProgress(
 )
 
 class GoalProgressRepository(private val dao: ProductivityDao) {
-    suspend fun progress(goal: GoalEntity, startDate: LocalDate, endDate: LocalDate): GoalProgress {
+    suspend fun progress(
+        goal: GoalEntity,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        zoneId: ZoneId = ZoneId.systemDefault()
+    ): GoalProgress {
         require(!endDate.isBefore(startDate))
-        val tasks = dao.completedLinkedTasks(goal.id, startDate.toString(), endDate.toString())
+        val startMillis = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val endMillis = endDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+        val tasks = dao.completedLinkedTasks(
+            goal.id, startDate.toString(), endDate.toString(), startMillis, endMillis
+        )
         val habits = dao.completedLinkedHabits(goal.id, startDate.toString(), endDate.toString())
         val completed = tasks + habits
         return GoalProgress(completed, goal.targetValue, goalProgressRatio(completed, goal.targetValue))

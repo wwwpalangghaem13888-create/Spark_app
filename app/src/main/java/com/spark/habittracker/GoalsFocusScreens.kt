@@ -52,11 +52,14 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
             val linkedHabitIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = dao.linkedHabitIds(goal.id) }
             val linkedTasks = tasks.filter { it.id in linkedIds }
             val endDate = goal.targetDate?.let { LocalDate.parse(it) } ?: LocalDate.now()
-            val startMillis = LocalDate.parse(goal.startDate).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-            val endMillis = endDate.plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() - 1
-            val completed by produceState(initialValue = 0, goal.id, tasks, linkedHabitIds) {
-                value = dao.completedLinkedTasks(goal.id, startMillis, endMillis) +
-                    dao.completedLinkedHabits(goal.id, goal.startDate, endDate.toString())
+            val startDate = LocalDate.parse(goal.startDate)
+            val zoneId = java.time.ZoneId.systemDefault()
+            val startMillis = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val endMillis = endDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+            val completed by produceState(initialValue = 0, goal.id, tasks, linkedHabitIds, startDate, endDate) {
+                value = dao.completedLinkedTasks(
+                    goal.id, startDate.toString(), endDate.toString(), startMillis, endMillis
+                ) + dao.completedLinkedHabits(goal.id, startDate.toString(), endDate.toString())
             }
             val progress = goalProgressRatio(completed, goal.targetValue)
             Card {
