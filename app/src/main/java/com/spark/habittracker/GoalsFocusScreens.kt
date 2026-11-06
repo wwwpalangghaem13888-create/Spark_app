@@ -145,14 +145,20 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
     var selectedMode by remember { mutableStateOf("FOCUS") }
     var customMinutes by remember { mutableStateOf("25") }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(activeSession?.id, activeSession?.pausedAt) {
-        while (true) { now = System.currentTimeMillis(); delay(1000) }
+    LaunchedEffect(activeSession?.id, activeSession?.pausedAt, activeSession?.mode) {
+        val tickMillis = if (activeSession?.mode == "STOPWATCH") 10L else 1000L
+        while (true) { now = System.currentTimeMillis(); delay(tickMillis) }
     }
     val remaining = activeSession?.let { focusRemainingSeconds(it, now) }
     val elapsed = activeSession?.let { focusElapsedSeconds(it, now) } ?: 0L
+    val elapsedMillis = activeSession?.let {
+        val end = it.pausedAt ?: now
+        (end - it.startedAt - it.accumulatedPausedSeconds * 1000L).coerceAtLeast(0L)
+    } ?: 0L
     val displaySeconds = if (activeSession?.mode == "STOPWATCH") elapsed else (remaining ?: 0L)
     val minutes = displaySeconds / 60
     val seconds = displaySeconds % 60
+    val hundredths = (elapsedMillis % 1000L) / 10L
     val progress = activeSession?.let {
         if (it.mode == "STOPWATCH" || it.plannedDurationSeconds <= 0) 0f
         else (1f - (remaining ?: 0L).toFloat() / it.plannedDurationSeconds).coerceIn(0f, 1f)
@@ -217,7 +223,13 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
             Spacer(Modifier.height(20.dp))
             Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(String.format(Locale.ROOT, "%02d:%02d", minutes, seconds), fontSize = 52.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        if (activeSession.mode == "STOPWATCH")
+                            String.format(Locale.ROOT, "%02d:%02d.%02d", minutes, seconds, hundredths)
+                        else String.format(Locale.ROOT, "%02d:%02d", minutes, seconds),
+                        fontSize = if (activeSession.mode == "STOPWATCH") 46.sp else 52.sp,
+                        fontWeight = FontWeight.Black
+                    )
                     Text(when {
                         activeSession.mode == "STOPWATCH" -> "کرنومتر"
                         activeSession.mode == "SHORT_BREAK" -> "استراحت کوتاه"
