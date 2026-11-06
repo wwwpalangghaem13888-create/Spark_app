@@ -1098,7 +1098,7 @@ private fun HabitEditor(
                         Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF42A5F5))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            selectedTime ?: "انتخاب ساعت",
+                            selectedTime ?: localizedText(language, "انتخاب ساعت", "Choose time", "اختر الوقت"),
                             color = if (selectedTime == null) Muted else White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold
