@@ -5,7 +5,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "habits")
+@Entity(tableName = "habits", indices = [Index("createdAt")])
 data class HabitEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String, val note: String, val category: String,
@@ -14,7 +14,7 @@ data class HabitEntity(
     val reminderTime: String = "08:00", val isEnabled: Boolean = true
 )
 
-@Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "date"], unique = true)], foreignKeys = [ForeignKey(entity = HabitEntity::class, parentColumns = ["id"], childColumns = ["habitId"], onDelete = ForeignKey.CASCADE)])
+@Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "date"], unique = true), Index("date")], foreignKeys = [ForeignKey(entity = HabitEntity::class, parentColumns = ["id"], childColumns = ["habitId"], onDelete = ForeignKey.CASCADE)])
 data class HabitLogEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val habitId: Long, val date: String, val isCompleted: Boolean, val completionTimestamp: Long = System.currentTimeMillis())
 
 @Entity(tableName = "user_settings")
@@ -40,7 +40,7 @@ interface HabitDao {
     @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 6, exportSchema = false)
+@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 7, exportSchema = false)
 abstract class SparkDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun taskDao(): TaskDao
@@ -222,6 +222,120 @@ abstract class SparkDatabase : RoomDatabase() {
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tasks ADD COLUMN reminderAt INTEGER")
+            }
+        }
+
+        /**
+         * Version 7 adds a real task relationship for focus sessions, guards the
+         * polymorphic reminder owner, and adds indexes matching observed query plans.
+         * Existing rows are copied in-place; no user table is dropped without copying.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Preserve every focus session. Invalid legacy task references are
+                // detached, not deleted, before the new SET_NULL foreign key is applied.
+                db.execSQL("""
+                    CREATE TABLE focus_sessions_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        mode TEXT NOT NULL,
+                        startedAt INTEGER NOT NULL,
+                        plannedDurationSeconds INTEGER NOT NULL,
+                        actualDurationSeconds INTEGER NOT NULL,
+                        pausedAt INTEGER,
+                        accumulatedPausedSeconds INTEGER NOT NULL,
+                        completed INTEGER NOT NULL,
+                        endedAt INTEGER,
+                        linkedTaskId INTEGER,
+                        FOREIGN KEY(linkedTaskId) REFERENCES tasks(id)
+                            ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                """)
+                db.execSQL("""
+                    INSERT INTO focus_sessions_new (
+                        id, mode, startedAt, plannedDurationSeconds, actualDurationSeconds,
+                        pausedAt, accumulatedPausedSeconds, completed, endedAt, linkedTaskId
+                    )
+                    SELECT id, mode, startedAt, plannedDurationSeconds, actualDurationSeconds,
+                           pausedAt, accumulatedPausedSeconds, completed, endedAt,
+                           CASE WHEN linkedTaskId IS NOT NULL AND EXISTS (
+                               SELECT 1 FROM tasks WHERE tasks.id = focus_sessions.linkedTaskId
+                           ) THEN linkedTaskId ELSE NULL END
+                    FROM focus_sessions
+                """)
+                db.execSQL("DROP TABLE focus_sessions")
+                db.execSQL("ALTER TABLE focus_sessions_new RENAME TO focus_sessions")
+
+                // Replace redundant single-column indexes with indexes aligned to
+                // the filters and sort orders used by the application.
+                db.execSQL("CREATE INDEX index_habits_createdAt ON habits(createdAt)")
+                db.execSQL("CREATE INDEX index_habit_logs_date ON habit_logs(date)")
+                db.execSQL("DROP INDEX IF EXISTS index_task_completion_history_taskId")
+                db.execSQL("CREATE INDEX index_task_completion_history_taskId_completed_activityDate ON task_completion_history(taskId, completed, activityDate)")
+                db.execSQL("DROP INDEX IF EXISTS index_goals_targetDate")
+                db.execSQL("DROP INDEX IF EXISTS index_goals_archived")
+                db.execSQL("CREATE INDEX index_goals_archived_targetDate ON goals(archived, targetDate)")
+                db.execSQL("CREATE INDEX index_focus_sessions_startedAt ON focus_sessions(startedAt)")
+                db.execSQL("CREATE INDEX index_focus_sessions_completed ON focus_sessions(completed)")
+                db.execSQL("CREATE INDEX index_focus_sessions_linkedTaskId ON focus_sessions(linkedTaskId)")
+                db.execSQL("DROP INDEX IF EXISTS index_reminders_triggerAt")
+                db.execSQL("CREATE INDEX index_reminders_enabled_triggerAt ON reminders(enabled, triggerAt)")
+
+                // Keep legacy orphan reminders for audit/backup compatibility, but
+                // disable them. New/updated reminders must point to a valid owner.
+                db.execSQL("""
+                    UPDATE reminders SET enabled = 0
+                    WHERE NOT (
+                        (ownerType = 'TASK' AND EXISTS (SELECT 1 FROM tasks WHERE id = ownerId)) OR
+                        (ownerType = 'HABIT' AND EXISTS (SELECT 1 FROM habits WHERE id = ownerId)) OR
+                        (ownerType = 'FOCUS' AND EXISTS (SELECT 1 FROM focus_sessions WHERE id = ownerId))
+                    )
+                """)
+
+                db.execSQL("""
+                    CREATE TRIGGER reminders_validate_insert
+                    BEFORE INSERT ON reminders
+                    WHEN NOT (
+                        (NEW.ownerType = 'TASK' AND EXISTS (SELECT 1 FROM tasks WHERE id = NEW.ownerId)) OR
+                        (NEW.ownerType = 'HABIT' AND EXISTS (SELECT 1 FROM habits WHERE id = NEW.ownerId)) OR
+                        (NEW.ownerType = 'FOCUS' AND EXISTS (SELECT 1 FROM focus_sessions WHERE id = NEW.ownerId))
+                    )
+                    BEGIN
+                        SELECT RAISE(ABORT, 'Reminder owner does not exist');
+                    END
+                """)
+                db.execSQL("""
+                    CREATE TRIGGER reminders_validate_update
+                    BEFORE UPDATE OF ownerType, ownerId ON reminders
+                    WHEN NOT (
+                        (NEW.ownerType = 'TASK' AND EXISTS (SELECT 1 FROM tasks WHERE id = NEW.ownerId)) OR
+                        (NEW.ownerType = 'HABIT' AND EXISTS (SELECT 1 FROM habits WHERE id = NEW.ownerId)) OR
+                        (NEW.ownerType = 'FOCUS' AND EXISTS (SELECT 1 FROM focus_sessions WHERE id = NEW.ownerId))
+                    )
+                    BEGIN
+                        SELECT RAISE(ABORT, 'Reminder owner does not exist');
+                    END
+                """)
+                db.execSQL("""
+                    CREATE TRIGGER reminders_delete_task
+                    AFTER DELETE ON tasks
+                    BEGIN
+                        DELETE FROM reminders WHERE ownerType = 'TASK' AND ownerId = OLD.id;
+                    END
+                """)
+                db.execSQL("""
+                    CREATE TRIGGER reminders_delete_habit
+                    AFTER DELETE ON habits
+                    BEGIN
+                        DELETE FROM reminders WHERE ownerType = 'HABIT' AND ownerId = OLD.id;
+                    END
+                """)
+                db.execSQL("""
+                    CREATE TRIGGER reminders_delete_focus_session
+                    AFTER DELETE ON focus_sessions
+                    BEGIN
+                        DELETE FROM reminders WHERE ownerType = 'FOCUS' AND ownerId = OLD.id;
+                    END
+                """)
             }
         }
     }
