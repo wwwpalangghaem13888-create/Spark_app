@@ -97,7 +97,8 @@ object SparkBackupManager {
         if (!has(key) || isNull(key)) null else getLong(key)
 
     private fun JSONObject.array(key: String): List<Any> {
-        val array = optJSONArray(key) ?: JSONArray()
+        require(has(key) && !isNull(key)) { "Backup is missing the '$key' collection." }
+        val array = optJSONArray(key) ?: error("Backup collection '$key' is invalid.")
         return (0 until array.length()).map { array.get(it) }
     }
 
