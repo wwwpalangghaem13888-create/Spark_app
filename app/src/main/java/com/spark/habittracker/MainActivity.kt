@@ -131,6 +131,14 @@ abstract class SparkDatabase : RoomDatabase() {
         }
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                // The legacy schema had no habit creation date. Use the earliest
+                // stored activity date as a safe lower bound so migrated history
+                // is not hidden by a migration-time timestamp.
+                db.execSQL("""UPDATE habits
+                    SET createdAt = COALESCE(
+                        (SELECT MIN(strftime('%s', date) * 1000 FROM habit_logs WHERE habitId = habits.id),
+                        createdAt
+                    )""")
                 db.execSQL("""CREATE TABLE tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                     title TEXT NOT NULL,
@@ -505,7 +513,10 @@ private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
 
 @Composable
 private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
-    val completedLogs = allLogs.filter { it.isCompleted }
+    val today = LocalDate.now()
+    val completedLogs = allLogs.filter { log ->
+        log.isCompleted && runCatching { !LocalDate.parse(log.date).isAfter(today) }.getOrDefault(false)
+    }
     val xp = calculateExperience(completedLogs.size)
     val level = calculateLevel(xp)
     val xpInLevel = xp % 100
