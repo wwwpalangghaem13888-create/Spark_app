@@ -17,14 +17,16 @@ import java.time.LocalDate
 import java.util.Locale
 
 @Composable
-fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifier = Modifier) {
+fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<HabitEntity>, modifier: Modifier = Modifier) {
     val goals by dao.observeGoals().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var editorOpen by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("5") }
+    var targetDate by remember { mutableStateOf("") }
     var selectedTaskIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var selectedHabitIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(modifier = modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -34,7 +36,7 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
                     Text("اهداف من", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("پیشرفت فقط از فعالیت‌های ثبت‌شده محاسبه می‌شود.", style = MaterialTheme.typography.bodySmall)
                 }
-                Button(onClick = { title = ""; description = ""; target = "5"; selectedTaskIds = emptySet(); error = null; editorOpen = true }) { Text("هدف جدید") }
+                Button(onClick = { title = ""; description = ""; target = "5"; targetDate = ""; selectedTaskIds = emptySet(); selectedHabitIds = emptySet(); error = null; editorOpen = true }) { Text("هدف جدید") }
             }
         }
         if (goals.isEmpty()) item {
@@ -47,13 +49,14 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
         }
         items(goals, key = { it.id }) { goal ->
             val linkedIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = dao.linkedTaskIds(goal.id) }
+            val linkedHabitIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = dao.linkedHabitIds(goal.id) }
             val linkedTasks = tasks.filter { it.id in linkedIds }
-            val completed = linkedTasks.count { task ->
-                task.completed && task.completedAt?.let { completedAt ->
-                    val completedDate = java.time.Instant.ofEpochMilli(completedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-                    !completedDate.isBefore(LocalDate.parse(goal.startDate)) &&
-                        (goal.targetDate == null || !completedDate.isAfter(LocalDate.parse(goal.targetDate)))
-                } == true
+            val endDate = goal.targetDate?.let { LocalDate.parse(it) } ?: LocalDate.now()
+            val startMillis = LocalDate.parse(goal.startDate).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val endMillis = endDate.plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() - 1
+            val completed by produceState(initialValue = 0, goal.id, tasks, linkedHabitIds) {
+                value = dao.completedLinkedTasks(goal.id, startMillis, endMillis) +
+                    dao.completedLinkedHabits(goal.id, goal.startDate, endDate.toString())
             }
             val progress = goalProgressRatio(completed, goal.targetValue)
             Card {
@@ -62,7 +65,7 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
                     if (goal.description.isNotBlank()) Text(goal.description, style = MaterialTheme.typography.bodySmall)
                     Text(completed.toString() + " از " + goal.targetValue.toInt() + " فعالیت مرتبط", style = MaterialTheme.typography.bodySmall)
                     LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(8.dp))
-                    Text((progress * 100).toInt().toString() + "٪ • " + linkedTasks.size + " وظیفه متصل", style = MaterialTheme.typography.labelSmall)
+                    Text((progress * 100).toInt().toString() + "٪ • " + linkedTasks.size + " وظیفه و " + linkedHabitIds.size + " عادت متصل", style = MaterialTheme.typography.labelSmall)
                     TextButton(onClick = { scope.launch { dao.archiveGoal(goal.id, System.currentTimeMillis()) } }) { Text("بایگانی هدف") }
                 }
             }
@@ -83,6 +86,12 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
                         onClick = { selectedTaskIds = if (task.id in selectedTaskIds) selectedTaskIds - task.id else selectedTaskIds + task.id },
                         label = { Text(task.title) })
                 }
+                Text("عادت‌های مرتبط")
+                habits.filter { it.isEnabled }.forEach { habit ->
+                    FilterChip(selected = habit.id in selectedHabitIds,
+                        onClick = { selectedHabitIds = if (habit.id in selectedHabitIds) selectedHabitIds - habit.id else selectedHabitIds + habit.id },
+                        label = { Text(habit.title) })
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
@@ -92,9 +101,19 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
                 if (title.isBlank()) error = "عنوان هدف الزامی است."
                 else if (parsedTarget == null || !parsedTarget.isFinite() || parsedTarget <= 0.0) error = "هدف باید عددی بزرگ‌تر از صفر باشد."
                 else scope.launch {
+                    val parsedDate = targetDate.trim().ifBlank { null }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    if (targetDate.isNotBlank() && parsedDate == null) {
+                        error = "تاریخ هدف باید با قالب yyyy-MM-dd باشد."
+                        return@launch
+                    }
+                    if (parsedDate != null && parsedDate.isBefore(LocalDate.now())) {
+                        error = "تاریخ هدف نمی‌تواند قبل از امروز باشد."
+                        return@launch
+                    }
                     val id = dao.insertGoal(GoalEntity(title = title.trim(), description = description.trim(),
-                        targetValue = parsedTarget, startDate = LocalDate.now().toString()))
+                        targetValue = parsedTarget, startDate = LocalDate.now().toString(), targetDate = parsedDate?.toString()))
                     selectedTaskIds.forEach { dao.linkTaskToGoal(GoalTaskLinkEntity(id, it)) }
+                    selectedHabitIds.forEach { dao.linkHabitToGoal(GoalHabitLinkEntity(id, it)) }
                     editorOpen = false
                 }
             }) { Text("ذخیره") }
