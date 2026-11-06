@@ -168,9 +168,15 @@ class ReminderReceiver : BroadcastReceiver() {
                     } else {
                         val reminder = dao.getEnabledReminders().firstOrNull { it.id == reminderId }
                         if (reminder != null) {
-                            ReminderScheduler.show(context, reminder.id, reminder.ownerType)
                             if (reminder.ownerType == "HABIT") {
                                 val habit = db.habitDao().findHabit(reminder.ownerId)
+                                if (habit?.reminderMode == "ALARM") {
+                                    val alarmIntent = Intent(context, AlarmRingingService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(alarmIntent)
+                                    else context.startService(alarmIntent)
+                                } else {
+                                    ReminderScheduler.show(context, reminder.id, reminder.ownerType)
+                                }
                                 val next = habit?.let { nextHabitReminder(it, System.currentTimeMillis() + 1000) }
                                 if (next != null) {
                                     dao.updateReminderTrigger(reminder.id, next)
