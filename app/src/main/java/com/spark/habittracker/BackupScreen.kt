@@ -43,12 +43,30 @@ fun BackupScreen(db: SparkDatabase, modifier: Modifier = Modifier) {
         }
     }
 
+    val csvLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri != null) scope.launch {
+            status = try {
+                val csv = exportTasksCsv(db.taskDao().getAllTasks())
+                val output = context.contentResolver.openOutputStream(uri) ?: error("Cannot open CSV destination.")
+                output.bufferedWriter(Charsets.UTF_8).use { it.write(csv) }
+                "خروجی CSV وظایف ذخیره شد."
+            } catch (error: Exception) {
+                "خروجی CSV ناموفق بود: " + (error.message ?: "خطای ناشناخته")
+            }
+        }
+    }
+
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) scope.launch {
             status = try {
                 val count = SparkBackupManager.import(context, db, uri)
+                db.productivityDao().getEnabledReminders()
+                    .filter { (it.snoozedUntil ?: it.triggerAt) > System.currentTimeMillis() }
+                    .forEach { ReminderScheduler.schedule(context, it) }
                 SparkWidgetProvider.refreshAll(context)
                 "بازیابی انجام شد. $count رکورد وارد یا به‌روزرسانی شد."
             } catch (error: Exception) {
@@ -65,6 +83,15 @@ fun BackupScreen(db: SparkDatabase, modifier: Modifier = Modifier) {
                 Text("فایل را در فضای دلخواه ذخیره کن. Spark برای استفادهٔ اصلی به حساب کاربری یا اینترنت نیاز ندارد.")
                 Button(onClick = { exportLauncher.launch("spark-backup.json") }, modifier = Modifier.fillMaxWidth()) {
                     Text("ساخت پشتیبان")
+                }
+            }
+        }
+        Card {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("خروجی CSV", style = MaterialTheme.typography.titleMedium)
+                Text("خروجی جدولی وظایف برای استفاده در صفحه‌گسترده‌ها.")
+                Button(onClick = { csvLauncher.launch("spark-tasks.csv") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("ذخیره CSV وظایف")
                 }
             }
         }
