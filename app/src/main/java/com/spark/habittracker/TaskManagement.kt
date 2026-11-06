@@ -93,6 +93,7 @@ interface TaskDao {
 /** Small repository boundary so UI code does not own task persistence rules. */
 class TaskRepository(private val dao: TaskDao) {
     fun observeActiveTasks(): Flow<List<TaskEntity>> = dao.observeActiveTasks()
+    suspend fun findById(taskId: Long): TaskEntity? = dao.findById(taskId)
 
     suspend fun save(task: TaskEntity): Long {
         val normalized = task.copy(
