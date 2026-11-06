@@ -133,31 +133,59 @@ class MainActivity : ComponentActivity() {
             val settings by container.habitRepository.observeSettings().collectAsState(initial = null)
             SparkTheme(settings ?: UserSettingsEntity()) {
                 var splashVisible by remember { mutableStateOf(true) }
+                val splashProgress by animateFloatAsState(
+                    targetValue = if (splashVisible) 1f else 0f,
+                    animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing),
+                    label = "splashFade"
+                )
+                val logoScale by animateFloatAsState(
+                    targetValue = if (splashVisible) 1f else 0.88f,
+                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+                    label = "logoScale"
+                )
                 LaunchedEffect(Unit) {
-                    delay(950)
+                    delay(1900)
                     splashVisible = false
                 }
                 Box(Modifier.fillMaxSize()) {
                     SparkApp(container, sparkViewModel)
-                    if (splashVisible) {
+                    if (splashVisible || splashProgress > 0.01f) {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(Color.Black),
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                alpha = splashProgress
+                            }.background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color(0xFF21113D), Color(0xFF090716), Color.Black),
+                                    radius = 1050f
+                                )
+                            ),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Image(
                                     painter = painterResource(R.drawable.spark_logo),
                                     contentDescription = "Spark logo",
-                                    modifier = Modifier.size(116.dp)
+                                    modifier = Modifier.size(128.dp * logoScale)
                                 )
-                                Spacer(Modifier.height(14.dp))
+                                Spacer(Modifier.height(18.dp))
                                 Text(
                                     "SPARK",
-                                    color = Color(0xFFE7D6FF),
-                                    fontSize = 25.sp,
+                                    color = Color(0xFFF1E7FF),
+                                    fontSize = 27.sp,
                                     fontWeight = FontWeight.Black,
-                                    letterSpacing = 5.sp
+                                    letterSpacing = 6.sp
                                 )
+                                Spacer(Modifier.height(9.dp))
+                                Text(
+                                    "BIGGER DREAMS  ✦  BRIGHTER YOU",
+                                    color = Color(0xFFC49A5A).copy(alpha = splashProgress),
+                                    fontSize = 9.sp,
+                                    letterSpacing = 1.6.sp
+                                )
+                                Spacer(Modifier.height(34.dp))
+                                Box(Modifier.width(42.dp).height(2.dp).clip(CircleShape).background(
+                                    Brush.horizontalGradient(listOf(Color.Transparent, Color(0xFFD6B8FF), Color.Transparent))
+                                ))
                             }
                         }
                     }
@@ -640,6 +668,45 @@ private fun Statistics(
             }
         }
         item {
+            val dailyTaskRates = report.days.takeLast(14).map { day ->
+                val due = tasks.count { it.dueDate == day.date.toString() }
+                if (due == 0) 0f else (day.completedTasks.toFloat() / due).coerceIn(0f, 1f)
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("درصد انجام کارها", color = White, fontWeight = FontWeight.Bold)
+                Text("بر اساس کارهایی که تاریخ انجامشان در بازهٔ انتخابی است", color = Muted, fontSize = 10.sp)
+                SparkLineChart(dailyTaskRates, Modifier.fillMaxWidth().height(150.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(report.startDate.toString(), color = Muted, fontSize = 9.sp)
+                    Text(report.endDate.toString(), color = Muted, fontSize = 9.sp)
+                }
+            }
+        }
+        item {
+            val completedNow = tasks.count { it.completed }
+            val openNow = tasks.count { !it.completed && !it.archived }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("کارهای انجام‌شده و باقی‌مانده", color = White, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    SparkPieChart(completedNow, openNow, Modifier.size(116.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(9.dp).clip(CircleShape).background(Violet))
+                            Spacer(Modifier.width(7.dp))
+                            Text("انجام‌شده: $completedNow", color = White, fontSize = 12.sp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(9.dp).clip(CircleShape).background(Cyan))
+                            Spacer(Modifier.width(7.dp))
+                            Text("باقی‌مانده: $openNow", color = White, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+        item {
             Text("روند روزانه", color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -675,6 +742,51 @@ private fun Statistics(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SparkLineChart(values: List<Float>, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        if (values.isEmpty()) return@Canvas
+        val left = 8f
+        val right = size.width - 8f
+        val top = 12f
+        val bottom = size.height - 14f
+        repeat(4) { index ->
+            val y = top + (bottom - top) * index / 3f
+            drawLine(Color.White.copy(alpha = 0.10f), androidx.compose.ui.geometry.Offset(left, y),
+                androidx.compose.ui.geometry.Offset(right, y), strokeWidth = 1.dp.toPx())
+        }
+        if (values.size == 1) {
+            drawCircle(Violet, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width / 2, top + (bottom-top) * (1f-values[0])))
+            return@Canvas
+        }
+        val points = values.mapIndexed { index, value ->
+            androidx.compose.ui.geometry.Offset(
+                left + (right-left) * index / (values.size-1).toFloat(),
+                bottom - (bottom-top) * value.coerceIn(0f,1f)
+            )
+        }
+        points.zipWithNext().forEach { (a,b) ->
+            drawLine(Violet, a, b, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+        }
+        points.forEach { drawCircle(VioletLight, radius = 3.dp.toPx(), center = it) }
+    }
+}
+
+@Composable
+private fun SparkPieChart(completed: Int, remaining: Int, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val total = completed + remaining
+        if (total <= 0) {
+            drawArc(Color.White.copy(alpha = 0.16f), 0f, 360f, true)
+            return@Canvas
+        }
+        val doneSweep = 360f * completed / total.toFloat()
+        drawArc(Violet, -90f, doneSweep, true)
+        if (remaining > 0) drawArc(Cyan, -90f + doneSweep, 360f - doneSweep, true)
+        drawCircle(Panel, radius = size.minDimension * 0.27f)
     }
 }
 
