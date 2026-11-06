@@ -6,6 +6,25 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 class SparkCalculationTest {
+    @Test fun localizedTextSupportsAllPersistedLanguages() {
+        assertEquals("فارسی", localizedText("fa", "فارسی", "Persian", "العربية"))
+        assertEquals("Persian", localizedText("en", "فارسی", "Persian", "العربية"))
+        assertEquals("العربية", localizedText("ar", "فارسی", "Persian", "العربية"))
+    }
+
+    @Test fun blankHabitReminderTimeMeansNoScheduledReminder() {
+        val habit = HabitEntity(
+            id = 99,
+            title = "No reminder",
+            note = "",
+            category = "Test",
+            reminderTime = "",
+            scheduledDays = "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY"
+        )
+        assertEquals(null, parseOptionalHabitReminderTime(""))
+        assertEquals(null, nextHabitReminder(habit, 1_000_000L, ZoneId.of("UTC")))
+    }
+
     @Test fun emptyHabitListHasZeroProgress() {
         assertEquals(0f, calculateCompletionRate(0, 0), 0.0001f)
     }

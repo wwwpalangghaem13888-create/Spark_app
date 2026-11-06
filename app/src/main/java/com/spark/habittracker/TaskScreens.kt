@@ -261,8 +261,10 @@ private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: ()
 @Composable
 fun TaskEditorDialog(
     initial: TaskEntity?,
+    initialReminderMode: String = "NOTIFICATION",
+    language: String = "fa",
     onDismiss: () -> Unit,
-    onSave: (TaskEntity) -> Unit
+    onSave: (TaskEntity, String) -> Unit
 ) {
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var description by remember(initial) { mutableStateOf(initial?.description.orEmpty()) }
@@ -271,6 +273,7 @@ fun TaskEditorDialog(
     var startAt by remember(initial) { mutableStateOf(initial?.startAt?.let { formatTaskTime(it) }.orEmpty()) }
     var endAt by remember(initial) { mutableStateOf(initial?.endAt?.let { formatTaskTime(it) }.orEmpty()) }
     var reminderAt by remember(initial) { mutableStateOf(initial?.reminderAt?.let { formatTaskTime(it) }.orEmpty()) }
+    var reminderMode by remember(initial, initialReminderMode) { mutableStateOf(initialReminderMode) }
     var recurrence by remember(initial) { mutableStateOf(initial?.recurrenceRule) }
     var tags by remember(initial) { mutableStateOf(initial?.tags.orEmpty()) }
     var priority by remember(initial) { mutableIntStateOf(initial?.priority ?: 1) }
@@ -288,6 +291,7 @@ fun TaskEditorDialog(
                 OutlinedTextField(startAt, { startAt = it; error = null }, label = { Text("زمان شروع (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
                 OutlinedTextField(endAt, { endAt = it; error = null }, label = { Text("زمان پایان (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
                 OutlinedTextField(reminderAt, { reminderAt = it; error = null }, label = { Text("زمان یادآوری (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
+                ReminderModeSelector(reminderMode, reminderAt.isNotBlank(), language) { reminderMode = it }
                 Text("تکرار")
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf(null to "هیچ‌کدام", "DAILY" to "روزانه", "WEEKLY" to "هفتگی", "WEEKDAYS" to "روزهای کاری", "MONTHLY" to "ماهانه").forEach { (rule, label) ->
@@ -344,7 +348,8 @@ fun TaskEditorDialog(
                                 completedAt = initial?.completedAt,
                                 archived = initial?.archived ?: false,
                                 createdAt = initial?.createdAt ?: System.currentTimeMillis()
-                            )
+                            ),
+                            reminderMode
                         )
                     } catch (_: Exception) {
                         error = "تاریخ یا زمان نامعتبر است؛ قالب‌های نمایش‌داده‌شده را بررسی کن."
