@@ -66,6 +66,19 @@ class ProductivitySystemsTest {
     }
 
     @Test
+    fun taskXpRewardsAreUniquePerTaskAndCalendarDay() {
+        val history = listOf(
+            TaskCompletionEntity(taskId = 1, completed = true, activityDate = "2026-11-05", completedAt = 1),
+            TaskCompletionEntity(taskId = 1, completed = true, activityDate = "2026-11-05", completedAt = 2),
+            TaskCompletionEntity(taskId = 1, completed = true, activityDate = "2026-11-06", completedAt = 3),
+            TaskCompletionEntity(taskId = 2, completed = false, activityDate = "2026-11-06", completedAt = 4),
+            TaskCompletionEntity(taskId = 3, completed = true, activityDate = "2026-11-07", completedAt = 5)
+        )
+        assertEquals(2, countUniqueTaskRewards(history, LocalDate.parse("2026-11-06")))
+        assertEquals(3, countUniqueTaskRewards(history, LocalDate.parse("2026-11-07")))
+    }
+
+    @Test
     fun goalProgressIsBoundedAndRejectsInvalidTargets() {
         assertEquals(0.5f, goalProgressRatio(5, 10.0), 0.0001f)
         assertEquals(1f, goalProgressRatio(15, 10.0), 0.0001f)
