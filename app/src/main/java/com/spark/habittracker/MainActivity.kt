@@ -542,6 +542,7 @@ private suspend fun recordTaskCompletionAndSyncReminder(
 
 @Composable
 private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, streaks: Map<Long, Int>, reducedMotion: Boolean, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, focusSessions: List<FocusSessionEntity>, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+    val language = LocalSparkLanguage.current
     val today = LocalDate.now()
     val tasksDueToday = tasks.filter { it.dueDate == today.toString() }
     val completedTasksToday = countUniqueTaskRewards(taskHistory, today) -
@@ -573,32 +574,32 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("$percentage٪", color = White, fontSize = 25.sp, fontWeight = FontWeight.Black)
-                        Text("امروز", color = Muted, fontSize = 10.sp)
+                        Text(localizedText(language, "امروز", "Today", "اليوم"), color = Muted, fontSize = 10.sp)
                     }
                 }
                 Spacer(Modifier.width(18.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("پیشرفت امروز", color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(if (habits.isEmpty()) "اولین عادتت را اضافه کن." else "$completedCount از ${habits.size} عادت انجام شده", color = Muted, fontSize = 13.sp)
+                    Text(localizedText(language, "پیشرفت امروز", "Today's progress", "إنجاز اليوم"), color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(if (habits.isEmpty()) localizedText(language, "اولین عادتت را اضافه کن.", "Add your first habit.", "أضف عادتك الأولى.") else localizedText(language, "$completedCount از ${habits.size} عادت انجام شده", "$completedCount of ${habits.size} habits completed", "أُنجزت $completedCount من ${habits.size} عادات"), color = Muted, fontSize = 13.sp)
                     Spacer(Modifier.height(9.dp))
-                    Text(if (habits.isNotEmpty() && completedCount == habits.size) "همه کارها انجام شد!" else "قدم‌های کوچک، تغییرهای بزرگ.", color = VioletLight, fontSize = 11.sp)
+                    Text(if (habits.isNotEmpty() && completedCount == habits.size) localizedText(language, "همه عادت‌های امروز انجام شد!", "All today's habits are done!", "اكتملت عادات اليوم!") else localizedText(language, "قدم‌های کوچک، تغییرهای بزرگ.", "Small steps make big changes.", "خطوات صغيرة تصنع فرقاً كبيراً."), color = VioletLight, fontSize = 11.sp)
                 }
             }
         }
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Metric("کل عادت‌ها", habits.size.toString(), Modifier.weight(1f))
-            Metric("انجام‌شده", completedCount.toString(), Modifier.weight(1f))
-            Metric("باقی‌مانده", (habits.size - completedCount).coerceAtLeast(0).toString(), Modifier.weight(1f))
+            Metric(localizedText(language, "کل عادت‌ها", "Total habits", "إجمالي العادات"), habits.size.toString(), Modifier.weight(1f))
+            Metric(localizedText(language, "انجام‌شده", "Completed", "مكتملة"), completedCount.toString(), Modifier.weight(1f))
+            Metric(localizedText(language, "باقی‌مانده", "Remaining", "متبقية"), (habits.size - completedCount).coerceAtLeast(0).toString(), Modifier.weight(1f))
         } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Metric("کارهای امروز", tasksDueToday.size.toString(), Modifier.weight(1f))
-                Metric("تکمیل امروز", completedTasksToday.toString(), Modifier.weight(1f))
-                Metric("تمرکز", focusMinutesToday.toString() + " دقیقه", Modifier.weight(1f))
+                Metric(localizedText(language, "کارهای امروز", "Today's tasks", "مهام اليوم"), tasksDueToday.size.toString(), Modifier.weight(1f))
+                Metric(localizedText(language, "تکمیل امروز", "Done today", "أُنجزت اليوم"), completedTasksToday.toString(), Modifier.weight(1f))
+                Metric(localizedText(language, "تمرکز", "Focus", "التركيز"), focusMinutesToday.toString() + localizedText(language, " دقیقه", " min", " د"), Modifier.weight(1f))
             }
         }
-        item { Text("کارهای پیش رو", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
-        if (tasksDueToday.isEmpty()) item { Text("برای امروز کاری زمان‌بندی نشده است.", color = Muted, fontSize = 12.sp) }
+        item { Text(localizedText(language, "کارهای پیش رو", "Upcoming tasks", "المهام القادمة"), color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        if (tasksDueToday.isEmpty()) item { Text(localizedText(language, "برای امروز کاری زمان‌بندی نشده است.", "Nothing is scheduled for today.", "لا توجد مهام مجدولة لليوم."), color = Muted, fontSize = 12.sp) }
         else items(tasksDueToday.take(3), key = { "task-" + it.id }) { task ->
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (task.completed) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = if (task.completed) Cyan else Muted)
@@ -606,7 +607,7 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
                 Text(if (task.completed) "انجام شد" else taskPriorityLabel(task.priority), color = Muted, fontSize = 10.sp)
             }
         }
-        item { Text("فهرست امروز", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        item { Text(localizedText(language, "فهرست امروز", "Today's habits", "عادات اليوم"), color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         if (habits.isEmpty()) item { EmptyState() } else items(habits, key = { it.id }) { h -> HabitCard(h, h.id in done, streaks[h.id] ?: 0, { onToggle(h, h.id in done) }, { onEdit(h) }, { onDelete(h) }) }
     }
 }
