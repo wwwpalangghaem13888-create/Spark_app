@@ -31,7 +31,7 @@ data class TaskSubtaskEntity(
 
 @Entity(
     tableName = "task_completion_history",
-    indices = [Index("taskId"), Index("completedAt")],
+    indices = [Index(value = ["taskId", "completed", "activityDate"]), Index("completedAt")],
     foreignKeys = [ForeignKey(entity = TaskEntity::class, parentColumns = ["id"], childColumns = ["taskId"], onDelete = ForeignKey.CASCADE)]
 )
 data class TaskCompletionEntity(
@@ -42,7 +42,7 @@ data class TaskCompletionEntity(
     val completedAt: Long
 )
 
-@Entity(tableName = "goals", indices = [Index("targetDate"), Index("archived")])
+@Entity(tableName = "goals", indices = [Index(value = ["archived", "targetDate"])])
 data class GoalEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
@@ -82,7 +82,8 @@ data class GoalHabitLinkEntity(val goalId: Long, val habitId: Long)
 
 @Entity(
     tableName = "focus_sessions",
-    indices = [Index("startedAt"), Index("completed")]
+    indices = [Index("startedAt"), Index("completed"), Index("linkedTaskId")],
+    foreignKeys = [ForeignKey(entity = TaskEntity::class, parentColumns = ["id"], childColumns = ["linkedTaskId"], onDelete = ForeignKey.SET_NULL)]
 )
 data class FocusSessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -99,7 +100,7 @@ data class FocusSessionEntity(
 
 @Entity(
     tableName = "reminders",
-    indices = [Index(value = ["ownerType", "ownerId"]), Index("triggerAt")]
+    indices = [Index(value = ["ownerType", "ownerId"]), Index(value = ["enabled", "triggerAt"])]
 )
 data class ReminderEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
