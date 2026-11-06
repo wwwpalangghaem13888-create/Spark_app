@@ -65,4 +65,19 @@ class SparkCalculationTest {
         assertEquals(1, calculateHabitStreak(habit, setOf(today.minusDays(1)), today, ZoneId.of("UTC")))
     }
 
+    @Test fun aMissedPreviousScheduledDayBreaksTheStreak() {
+        val today = LocalDate.of(2026, 11, 6)
+        val habit = HabitEntity(
+            id = 3,
+            title = "Practice",
+            note = "",
+            category = "Study",
+            createdAt = today.minusDays(10).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
+            scheduledDays = "MONDAY,WEDNESDAY,FRIDAY"
+        )
+        // Friday is still in progress; Wednesday was missed, so Monday cannot extend the streak.
+        assertEquals(0, calculateHabitStreak(habit, setOf(today.minusDays(4)), today, ZoneId.of("UTC")))
+    }
+
+
 }
