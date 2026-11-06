@@ -3,6 +3,7 @@ import android.os.Bundle
 import android.os.Build
 import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.ViewModelProvider
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -288,7 +289,11 @@ abstract class SparkDatabase : RoomDatabase() {
 }
 
 class MainActivity : ComponentActivity() {
-    private val db by lazy { SparkDatabaseFactory.create(applicationContext) }
+    private val container by lazy { (application as SparkApplication).container }
+    private val db by lazy { container.database }
+    private val sparkViewModel by lazy {
+        ViewModelProvider(this, SparkViewModel.Factory(container))[SparkViewModel::class.java]
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ReminderScheduler.ensureChannel(this)
@@ -297,7 +302,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by db.habitDao().observeSettings().collectAsState(initial = null)
-            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(db.habitDao(), db) }
+            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(db.habitDao(), db, sparkViewModel) }
         }
     }
 }
@@ -333,7 +338,7 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
+private fun SparkApp(dao: HabitDao, db: SparkDatabase, viewModel: SparkViewModel) {
     val context = LocalContext.current
     var tab by remember { mutableIntStateOf(0) }
     var date by remember { mutableStateOf(LocalDate.now()) }
@@ -343,7 +348,12 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     var taskEditorOpen by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
     val taskRepository = remember(db) { TaskRepository(db.taskDao()) }
-    val tasks by taskRepository.observeActiveTasks().collectAsState(initial = emptyList())
+    val taskState by viewModel.tasks.collectAsState()
+    val tasks = (taskState as? SparkLoadState.Data)?.value.orEmpty()
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.errors.collect { error -> snackbarHostState.showSnackbar(error.userMessage()) }
+    }
     val archivedTasks by db.taskDao().observeArchivedTasks().collectAsState(initial = emptyList())
     val focusSessions by db.productivityDao().observeFocusSessions().collectAsState(initial = emptyList())
     val taskHistory by db.productivityDao().observeAllTaskHistory().collectAsState(initial = emptyList())
@@ -380,7 +390,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val todayHabits = habits.filter { it.isScheduledOn(currentDay) }
     val completedCount = done.intersect(scheduledHabits.map { it.id }.toSet()).size
     val progress = calculateCompletionRate(completedCount, scheduledHabits.size)
-    Scaffold(containerColor = Ink,
+    Scaffold(containerColor = Ink, snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { TopAppBar(title = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
@@ -418,18 +428,18 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     } },
                     onEdit = { editingTask = it; taskEditorOpen = true },
                     onArchive = { task -> scope.launch {
-                        taskRepository.archive(task.id)
+                        viewModel.archive(task.id)
                         db.productivityDao().disableRemindersForOwner("TASK", task.id)
                         SparkWidgetProvider.refreshAll(context)
                     } },
                     onDelete = { task -> scope.launch {
                         db.productivityDao().deleteRemindersForOwner("TASK", task.id)
-                        taskRepository.deletePermanently(task.id)
+                        viewModel.deletePermanently(task.id)
                         SparkWidgetProvider.refreshAll(context)
                     } },
-                    onDuplicate = { task -> scope.launch { taskRepository.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
+                    onDuplicate = { task -> scope.launch { viewModel.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
                     onRestore = { task -> scope.launch {
-                        taskRepository.restore(task.id)
+                        viewModel.restore(task.id)
                         taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
                             db.productivityDao().deleteRemindersForOwner("TASK", task.id)
                             val reminder = ReminderEntity(ownerType = "TASK", ownerId = task.id, triggerAt = triggerAt)
