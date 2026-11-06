@@ -120,6 +120,8 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val context = LocalContext.current
     val db = container.database
     val dao = db.habitDao()
+    val habitRepository = container.habitRepository
+    val productivityRepository = container.productivityRepository
     val taskRepository = remember(container) { container.taskRepository }
     var destination by remember { mutableStateOf(SparkDestination.Dashboard) }
     val tab = destination.tabIndex
@@ -136,12 +138,12 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
         viewModel.errors.collect { error -> snackbarHostState.showSnackbar(error.userMessage()) }
     }
     val archivedTasks by db.taskDao().observeArchivedTasks().collectAsState(initial = emptyList())
-    val focusSessions by db.productivityDao().observeFocusSessions().collectAsState(initial = emptyList())
-    val taskHistory by db.productivityDao().observeAllTaskHistory().collectAsState(initial = emptyList())
-    val habits by dao.observeHabits().collectAsState(initial = emptyList())
-    val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
-    val todayLogs by remember(currentDay) { dao.observeLogs(currentDay.toString()) }.collectAsState(initial = emptyList())
-    val allLogs by dao.observeAllLogs().collectAsState(initial = emptyList())
+    val focusSessions by productivityRepository.observeFocusSessions().collectAsState(initial = emptyList())
+    val taskHistory by productivityRepository.observeTaskHistory().collectAsState(initial = emptyList())
+    val habits by habitRepository.observeHabits().collectAsState(initial = emptyList())
+    val logs by remember(date) { habitRepository.observeLogs(date) }.collectAsState(initial = emptyList())
+    val todayLogs by remember(currentDay) { habitRepository.observeLogs(currentDay) }.collectAsState(initial = emptyList())
+    val allLogs by habitRepository.observeAllLogs().collectAsState(initial = emptyList())
     val savedSettings by dao.observeSettings().collectAsState(initial = null)
     val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
@@ -196,7 +198,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, taskHistory, focusSessions,
-                    onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
+                    onToggle = { h, wasDone -> scope.launch { habitRepository.record(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch {
                         db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) }
@@ -243,7 +245,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                     logs = allLogs,
                     onToggleHabit = { habit, completed ->
                         scope.launch {
-                            dao.saveLog(HabitLogEntity(habitId = habit.id, date = date.toString(), isCompleted = completed))
+                            habitRepository.record(HabitLogEntity(habitId = habit.id, date = date.toString(), isCompleted = completed))
                         }
                     },
                     onToggleTask = { task, completed ->
