@@ -387,10 +387,13 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     tasks = tasks,
                     onToggle = { task, completed -> scope.launch {
                         db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), LocalDate.now().toString())
+                        SparkWidgetProvider.refreshAll(context)
                     } },
                     onEdit = { editingTask = it; taskEditorOpen = true },
-                    onArchive = { task -> scope.launch { taskRepository.archive(task.id) } },
-                    onDelete = { task -> scope.launch { taskRepository.deletePermanently(task.id) } }
+                    onArchive = { task -> scope.launch { taskRepository.archive(task.id); SparkWidgetProvider.refreshAll(context) } },
+                    onDelete = { task -> scope.launch { taskRepository.deletePermanently(task.id); SparkWidgetProvider.refreshAll(context) } },
+                    onDuplicate = { task -> scope.launch { taskRepository.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
+                    productivityDao = db.productivityDao()
                 )
                 2 -> SparkCalendarScreen(
                     selectedDate = date,
