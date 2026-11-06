@@ -57,6 +57,7 @@ fun SparkCalendarScreen(
     onToggleHabit: (HabitEntity, Boolean) -> Unit,
     onToggleTask: (TaskEntity, Boolean) -> Unit
 ) {
+    val language = LocalSparkLanguage.current
     var modeIndex by remember { mutableIntStateOf(2) }
     val mode = CalendarMode.entries[modeIndex]
     val locale = Locale("fa")
@@ -90,7 +91,7 @@ fun SparkCalendarScreen(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("تقویم Spark", style = MaterialTheme.typography.headlineSmall)
+        Text(localizedText(language, "تقویم Spark", "Spark Calendar", "تقويم Spark"), style = MaterialTheme.typography.headlineSmall)
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -116,7 +117,7 @@ fun SparkCalendarScreen(
             }) { Icon(Icons.Default.ChevronLeft, contentDescription = "بازه بعد") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("روز", "هفته", "ماه").forEachIndexed { index, label ->
+            listOf(localizedText(language, "روز", "Day", "يوم"), localizedText(language, "هفته", "Week", "أسبوع"), localizedText(language, "ماه", "Month", "شهر")).forEachIndexed { index, label ->
                 FilterChip(selected = modeIndex == index, onClick = { modeIndex = index }, label = { Text(label) })
             }
         }
