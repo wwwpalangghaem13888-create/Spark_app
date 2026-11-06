@@ -265,6 +265,7 @@ interface ProductivityDao {
                     dueDate = nextDate.toString(),
                     completed = false,
                     completedAt = null,
+                    reminderAt = null,
                     archived = false,
                     recurrenceParentId = rootId,
                     createdAt = atMillis,
