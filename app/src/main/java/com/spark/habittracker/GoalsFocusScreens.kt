@@ -125,6 +125,7 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
 @Composable
 fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
     val session by dao.observeActiveFocusSession().collectAsState(initial = null)
+    val activeSession = session
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var selectedMinutes by remember { mutableLongStateOf(25L) }
@@ -134,12 +135,12 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
     LaunchedEffect(session?.id, session?.pausedAt) {
         while (true) { now = System.currentTimeMillis(); delay(1000) }
     }
-    val remaining = session?.let { focusRemainingSeconds(it, now) }
-    val elapsed = session?.let { focusElapsedSeconds(it, now) } ?: 0L
-    val displaySeconds = if (session?.mode == "STOPWATCH") elapsed else (remaining ?: 0L)
+    val remaining = activeSession?.let { focusRemainingSeconds(it, now) }
+    val elapsed = activeSession?.let { focusElapsedSeconds(it, now) } ?: 0L
+    val displaySeconds = if (activeSession?.mode == "STOPWATCH") elapsed else (remaining ?: 0L)
     val minutes = displaySeconds / 60
     val seconds = displaySeconds % 60
-    val progress = session?.let {
+    val progress = activeSession?.let {
         if (it.mode == "STOPWATCH" || it.plannedDurationSeconds <= 0) 0f
         else (1f - (remaining ?: 0L).toFloat() / it.plannedDurationSeconds).coerceIn(0f, 1f)
     } ?: 0f
@@ -148,7 +149,7 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Text("Spark Focus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("جلسه با زمان واقعی ذخیره می‌شود؛ بستن برنامه تایمر را صفر نمی‌کند.", style = MaterialTheme.typography.bodySmall)
-        if (session == null) {
+        if (activeSession == null) {
             Text("نوع جلسه")
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 listOf("FOCUS" to "تمرکز", "SHORT_BREAK" to "استراحت کوتاه", "LONG_BREAK" to "استراحت بلند", "STOPWATCH" to "کرنومتر").forEach { (key, label) ->
@@ -184,38 +185,38 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(String.format(Locale.ROOT, "%02d:%02d", minutes, seconds), fontSize = 52.sp, fontWeight = FontWeight.Black)
                     Text(when {
-                        session.mode == "STOPWATCH" -> "کرنومتر"
-                        session.mode == "SHORT_BREAK" -> "استراحت کوتاه"
-                        session.mode == "LONG_BREAK" -> "استراحت بلند"
-                        session.pausedAt != null -> "متوقف‌شده"
+                        activeSession.mode == "STOPWATCH" -> "کرنومتر"
+                        activeSession.mode == "SHORT_BREAK" -> "استراحت کوتاه"
+                        activeSession.mode == "LONG_BREAK" -> "استراحت بلند"
+                        activeSession.pausedAt != null -> "متوقف‌شده"
                         else -> "در حال تمرکز"
                     }, style = MaterialTheme.typography.titleMedium)
                 }
             }
-            if (session.mode != "STOPWATCH") LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(10.dp))
+            if (activeSession.mode != "STOPWATCH") LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (session.pausedAt == null) Button(onClick = { scope.launch {
-                    dao.updateFocusPause(session.id, now, session.accumulatedPausedSeconds)
-                    dao.disableRemindersForOwner("FOCUS", session.id)
+                if (activeSession.pausedAt == null) Button(onClick = { scope.launch {
+                    dao.updateFocusPause(activeSession.id, now, activeSession.accumulatedPausedSeconds)
+                    dao.disableRemindersForOwner("FOCUS", activeSession.id)
                 } }) { Text("مکث") }
                 else Button(onClick = { scope.launch {
-                    val pausedSeconds = ((now - (session.pausedAt ?: now)) / 1000).coerceAtLeast(0)
-                    dao.updateFocusPause(session.id, null, session.accumulatedPausedSeconds + pausedSeconds)
-                    val left = if (session.mode == "STOPWATCH") 0L else remaining ?: 0L
+                    val pausedSeconds = ((now - (activeSession.pausedAt ?: now)) / 1000).coerceAtLeast(0)
+                    dao.updateFocusPause(activeSession.id, null, activeSession.accumulatedPausedSeconds + pausedSeconds)
+                    val left = if (activeSession.mode == "STOPWATCH") 0L else remaining ?: 0L
                     if (left > 0) {
-                        dao.deleteRemindersForOwner("FOCUS", session.id)
-                        val reminder = ReminderEntity(ownerType = "FOCUS", ownerId = session.id, triggerAt = now + left * 1000)
+                        dao.deleteRemindersForOwner("FOCUS", activeSession.id)
+                        val reminder = ReminderEntity(ownerType = "FOCUS", ownerId = activeSession.id, triggerAt = now + left * 1000)
                         val reminderId = dao.insertReminder(reminder)
                         ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                     }
                 } }) { Text("ادامه") }
                 TextButton(onClick = { scope.launch {
-                    val actual = if (session.mode == "STOPWATCH") elapsed else (session.plannedDurationSeconds - (remaining ?: 0L)).coerceAtLeast(0)
-                    dao.finishFocusSession(session.id, actual, session.mode == "STOPWATCH" || remaining == 0L, now)
-                    dao.disableRemindersForOwner("FOCUS", session.id)
+                    val actual = if (activeSession.mode == "STOPWATCH") elapsed else (activeSession.plannedDurationSeconds - (remaining ?: 0L)).coerceAtLeast(0)
+                    dao.finishFocusSession(activeSession.id, actual, activeSession.mode == "STOPWATCH" || remaining == 0L, now)
+                    dao.disableRemindersForOwner("FOCUS", activeSession.id)
                 } }) { Text("پایان جلسه") }
             }
-            if (session.mode != "STOPWATCH" && remaining == 0L) Text("زمان جلسه تمام شد.", color = MaterialTheme.colorScheme.primary)
+            if (activeSession.mode != "STOPWATCH" && remaining == 0L) Text("زمان جلسه تمام شد.", color = MaterialTheme.colorScheme.primary)
         }
     }
 }
