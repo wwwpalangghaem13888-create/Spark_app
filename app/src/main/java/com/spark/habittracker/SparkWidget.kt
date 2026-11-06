@@ -34,7 +34,8 @@ class SparkWidgetProvider : AppWidgetProvider() {
                         SparkDatabase.MIGRATION_1_2,
                         SparkDatabase.MIGRATION_2_3,
                         SparkDatabase.MIGRATION_3_4,
-                        SparkDatabase.MIGRATION_4_5
+                        SparkDatabase.MIGRATION_4_5,
+                        SparkDatabase.MIGRATION_5_6
                     ).build()
                 try {
                     val tasks = db.taskDao().getWidgetTasks()
@@ -82,7 +83,8 @@ class SparkWidgetActionReceiver : BroadcastReceiver() {
                         SparkDatabase.MIGRATION_1_2,
                         SparkDatabase.MIGRATION_2_3,
                         SparkDatabase.MIGRATION_3_4,
-                        SparkDatabase.MIGRATION_4_5
+                        SparkDatabase.MIGRATION_4_5,
+                        SparkDatabase.MIGRATION_5_6
                     ).build()
                 try {
                     db.productivityDao().recordTaskCompletion(taskId, true, System.currentTimeMillis(), LocalDate.now().toString())
