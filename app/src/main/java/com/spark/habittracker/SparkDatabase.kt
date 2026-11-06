@@ -37,14 +37,12 @@ interface HabitDao {
     @Update suspend fun updateHabit(habit: HabitEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveLog(log: HabitLogEntity)
     @Query("DELETE FROM habit_logs WHERE habitId = :id") suspend fun deleteLogs(id: Long)
-    @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
-
-    /** The FK cascade and reminder cleanup trigger run in this same transaction. */
+    /** Foreign-key cascades and reminder cleanup triggers execute atomically. */
     @Transaction
-    suspend fun deleteHabitAndDependents(id: Long): Int = deleteHabitReturningCount(id)
+    suspend fun deleteHabitAndDependents(id: Long): Int = deleteHabit(id)
 
     @Query("DELETE FROM habits WHERE id = :id")
-    suspend fun deleteHabitReturningCount(id: Long): Int
+    suspend fun deleteHabit(id: Long): Int
 }
 
 @Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 7, exportSchema = false)
