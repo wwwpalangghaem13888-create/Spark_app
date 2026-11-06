@@ -96,13 +96,13 @@ object SparkBackupManager {
         require(tasks.all { it.recurrenceParentId == null || it.recurrenceParentId in taskIds }) { "Recurring task references a missing parent." }
         require(sessions.all { it.linkedTaskId == null || it.linkedTaskId in taskIds }) { "Focus session references a missing task." }
         require(reminders.all { reminder ->
-            reminder.ownerId > 0 && when (reminder.ownerType) {
+            reminder.ownerId > 0 && (!reminder.enabled || when (reminder.ownerType) {
                 "TASK" -> reminder.ownerId in taskIds
                 "HABIT" -> reminder.ownerId in habitIds
                 "FOCUS" -> reminder.ownerId in sessionIds
                 else -> false
-            }
-        }) { "Reminder references an unsupported or missing owner." }
+            })
+        }) { "An enabled reminder must reference a supported, existing owner." }
         val allowedDays = java.time.DayOfWeek.values().map { it.name }.toSet()
         require(habits.all { habit ->
             val rawDays = habit.scheduledDays.split(",").map { it.trim().uppercase(java.util.Locale.ROOT) }
