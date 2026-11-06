@@ -82,6 +82,7 @@ data class UserSettingsEntity(@PrimaryKey val id: Int = 1, val theme: String = "
 @Dao
 interface HabitDao {
     @Query("SELECT * FROM habits ORDER BY createdAt DESC") fun observeHabits(): Flow<List<HabitEntity>>
+    @Query("SELECT * FROM habits WHERE id = :id LIMIT 1") suspend fun findHabit(id: Long): HabitEntity?
     @Query("SELECT * FROM habit_logs WHERE date = :date") fun observeLogs(date: String): Flow<List<HabitLogEntity>>
     @Query("SELECT * FROM habit_logs") fun observeAllLogs(): Flow<List<HabitLogEntity>>
     @Query("SELECT * FROM habits") suspend fun getAllHabits(): List<HabitEntity>
@@ -434,16 +435,23 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             }
         }
     }
-    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category ->
+    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category, scheduledDays, reminderTime ->
         scope.launch {
             val habit = HabitEntity(
                 id = editing?.id ?: 0, title = title.trim(), note = note.trim(),
                 category = category.trim().ifBlank { "عمومی" },
                 createdAt = editing?.createdAt ?: System.currentTimeMillis(),
-                scheduledDays = editing?.scheduledDays ?: "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY",
-                reminderTime = editing?.reminderTime ?: "08:00", isEnabled = editing?.isEnabled ?: true
+                scheduledDays = scheduledDays,
+                reminderTime = reminderTime,
+                isEnabled = editing?.isEnabled ?: true
             )
-            if (editing == null) dao.insertHabit(habit) else dao.updateHabit(habit)
+            val habitId = if (editing == null) dao.insertHabit(habit) else { dao.updateHabit(habit); habit.id }
+            db.productivityDao().deleteRemindersForOwner("HABIT", habitId)
+            nextHabitReminder(habit, System.currentTimeMillis())?.let { triggerAt ->
+                val reminder = ReminderEntity(ownerType = "HABIT", ownerId = habitId, triggerAt = triggerAt)
+                val reminderId = db.productivityDao().insertReminder(reminder)
+                ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+            }
         }
         editorOpen = false
     }
@@ -785,19 +793,48 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
 }
 
 @Composable
-private fun HabitEditor(initial: HabitEntity?, dismiss: () -> Unit, save: (String, String, String) -> Unit) {
+private fun HabitEditor(
+    initial: HabitEntity?,
+    dismiss: () -> Unit,
+    save: (String, String, String, String, String) -> Unit
+) {
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
-    var error by remember { mutableStateOf(false) }
+    var reminderTime by remember(initial) { mutableStateOf(initial?.reminderTime ?: "08:00") }
+    val days = listOf(
+        "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
+        "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
+    )
+    var selectedDays by remember(initial) {
+        mutableStateOf(initial?.scheduledDays?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: days.map { it.first }.toSet())
+    }
+    var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = dismiss, containerColor = Panel,
         title = { Text(if (initial == null) "عادت جدید" else "ویرایش عادت", color = White) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            OutlinedTextField(title, { title = it; error = false }, label = { Text("عنوان عادت") }, singleLine = true)
+            OutlinedTextField(title, { title = it; error = null }, label = { Text("عنوان عادت") }, singleLine = true)
             OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
             OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, minLines = 2)
-            if (error) Text("عنوان نمی‌تواند خالی باشد.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            Text("روزهای برنامه")
+            days.chunked(4).forEach { group ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    group.forEach { (key, label) ->
+                        FilterChip(selected = key in selectedDays,
+                            onClick = { selectedDays = if (key in selectedDays) selectedDays - key else selectedDays + key },
+                            label = { Text(label) })
+                    }
+                }
+            }
+            OutlinedTextField(reminderTime, { reminderTime = it; error = null }, label = { Text("ساعت یادآوری (HH:mm)") }, singleLine = true)
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
         } },
-        confirmButton = { TextButton(onClick = { if (title.isBlank()) error = true else save(title, note, category) }) { Text("ذخیره", color = Violet) } },
+        confirmButton = { TextButton(onClick = {
+            val validTime = runCatching { java.time.LocalTime.parse(reminderTime) }.isSuccess
+            if (title.isBlank()) error = "عنوان نمی‌تواند خالی باشد."
+            else if (selectedDays.isEmpty()) error = "حداقل یک روز انتخاب کن."
+            else if (!validTime) error = "ساعت باید با قالب HH:mm وارد شود."
+            else save(title, note, category, days.filter { it.first in selectedDays }.joinToString(",") { it.first }, reminderTime)
+        }) { Text("ذخیره", color = Violet) } },
         dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } })
 }
