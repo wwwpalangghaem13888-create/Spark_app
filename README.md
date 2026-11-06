@@ -14,6 +14,9 @@ Spark is a Persian, right-to-left Android habit tracker built with Kotlin, Jetpa
 - Task categories, descriptions, tags, due dates, four priority levels, and search/filter views.
 - Overdue detection based on ISO local dates; malformed dates are ignored safely rather than crashing the task list.
 - Task repository boundary keeps input normalization and persistence rules outside Compose screens.
+- Interactive month, week, and day calendar views with Persian Saturday-first week layout.
+- Calendar agenda combines real scheduled habits, habit completion records, and tasks due on the selected date.
+- Schedule-aware habit streak calculation: unscheduled days are skipped, missed scheduled days break the streak, and comparisons use local calendar dates.
 - Unit tests for task deadline and priority rules.
 - Preserve legacy task schedules, reminder-time metadata, enabled state, and completion timestamps during Room migrations.
 - Date-based history with previous/next-day navigation.
