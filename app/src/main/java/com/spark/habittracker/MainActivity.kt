@@ -865,18 +865,18 @@ private fun CustomAccentDialog(initialAccent: String, onDismiss: () -> Unit, onS
     val generatedHex = String.format("#%06X", 0xFFFFFF and preview.toArgb())
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("استودیو ساخت رنگ", color = White) },
+        title = { Text(localizedText(LocalSparkLanguage.current, "استودیو ساخت رنگ", "Color studio", "استوديو الألوان"), color = White) },
         containerColor = Panel,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(preview)
                 )
-                Text("فام رنگ", color = White)
+                Text(localizedText(LocalSparkLanguage.current, "فام رنگ", "Hue", "درجة اللون"), color = White)
                 Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
-                Text("اشباع", color = White)
+                Text(localizedText(LocalSparkLanguage.current, "اشباع", "Saturation", "التشبع"), color = White)
                 Slider(value = saturation, onValueChange = { saturation = it }, valueRange = 0f..1f)
-                Text("روشنایی", color = White)
+                Text(localizedText(LocalSparkLanguage.current, "روشنایی", "Brightness", "السطوع"), color = White)
                 Slider(value = brightness, onValueChange = { brightness = it }, valueRange = 0f..1f)
                 OutlinedTextField(
                     value = hexText,
@@ -892,7 +892,7 @@ private fun CustomAccentDialog(initialAccent: String, onDismiss: () -> Unit, onS
                             }
                         }
                     },
-                    label = { Text("کد رنگ HEX") },
+                    label = { Text(localizedText(LocalSparkLanguage.current, "کد رنگ HEX", "HEX color", "رمز اللون HEX")) },
                     supportingText = { Text("نمونه: #7C4DFF") },
                     singleLine = true
                 )
@@ -900,7 +900,7 @@ private fun CustomAccentDialog(initialAccent: String, onDismiss: () -> Unit, onS
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(generatedHex) }) { Text("ذخیره رنگ", color = Violet) }
+            TextButton(onClick = { onSave(generatedHex) }) { Text(localizedText(LocalSparkLanguage.current, "ذخیره رنگ", "Save color", "حفظ اللون"), color = Violet) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("انصراف", color = Muted) }
@@ -1042,17 +1042,17 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
         item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(localizedText(language, "ظاهر برنامه", "Appearance", "المظهر"), color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text("تم", color = Muted, fontSize = 12.sp)
+                Text(localizedText(language, "تم", "Theme", "السمة"), color = Muted, fontSize = 12.sp)
                 val themeOptions = listOf(
-                    "neon" to "نئون بنفش",
-                    "dark" to "مشکی عمیق",
-                    "midnight" to "نیمه‌شب",
-                    "neon-blue" to "نئون آبی",
-                    "neon-green" to "نئون سبز",
-                    "neon-pink" to "نئون صورتی",
-                    "neon-red" to "نئون قرمز",
-                    "minimal" to "مینیمال",
-                    "light" to "روشن"
+                    "neon" to localizedText(language, "نئون بنفش", "Purple neon", "نيون بنفسجي"),
+                    "dark" to localizedText(language, "مشکی عمیق", "Deep black", "أسود داكن"),
+                    "midnight" to localizedText(language, "نیمه‌شب", "Midnight", "منتصف الليل"),
+                    "neon-blue" to localizedText(language, "نئون آبی", "Blue neon", "نيون أزرق"),
+                    "neon-green" to localizedText(language, "نئون سبز", "Green neon", "نيون أخضر"),
+                    "neon-pink" to localizedText(language, "نئون صورتی", "Pink neon", "نيون وردي"),
+                    "neon-red" to localizedText(language, "نئون قرمز", "Red neon", "نيون أحمر"),
+                    "minimal" to localizedText(language, "مینیمال", "Minimal", "بسيط"),
+                    "light" to localizedText(language, "روشن", "Light", "فاتح")
                 )
                 themeOptions.chunked(3).forEach { group ->
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1073,16 +1073,16 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                         }
                     }
                 }
-                Text("رنگ تأکیدی", color = Muted, fontSize = 12.sp)
+                Text(localizedText(language, "رنگ تأکیدی", "Accent color", "لون التمييز"), color = Muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    listOf("violet" to "بنفش", "cyan" to "فیروزه‌ای", "lime" to "سبز", "pink" to "صورتی").forEach { (key, label) ->
+                    listOf("violet" to localizedText(language, "بنفش", "Violet", "بنفسجي"), "cyan" to localizedText(language, "فیروزه‌ای", "Cyan", "سماوي"), "lime" to localizedText(language, "سبز", "Lime", "ليموني"), "pink" to localizedText(language, "صورتی", "Pink", "وردي")).forEach { (key, label) ->
                         FilterChip(selected = settings.accent == key, onClick = { onSettingsChange(settings.copy(accent = key)) }, label = { Text(label) })
                     }
                 }
                 OutlinedButton(onClick = { showColorStudio = true }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Palette, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("استودیو رنگ دلخواه")
+                    Text(localizedText(language, "استودیو رنگ دلخواه", "Custom color studio", "استوديو الألوان"))
                 }
 
                 Text(localizedText(language, "زبان برنامه", "App language", "لغة التطبيق"), color = Muted, fontSize = 12.sp)
@@ -1105,7 +1105,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                             selectedSoundMode = "DEFAULT"
                             selectedSoundUri = null
                         },
-                        label = { Text("صدای دستگاه") }
+                        label = { Text(localizedText(language, "صدای دستگاه", "Device sound", "صوت الجهاز")) }
                     )
                     FilterChip(
                         selected = selectedSoundMode == "SILENT",
@@ -1114,13 +1114,13 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                             selectedSoundMode = "SILENT"
                             selectedSoundUri = null
                         },
-                        label = { Text("بی‌صدا") }
+                        label = { Text(localizedText(language, "بی‌صدا", "Silent", "صامت")) }
                     )
                 }
                 OutlinedButton(onClick = { soundPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.LibraryMusic, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if (selectedSoundMode == "CUSTOM") "تغییر فایل صدای انتخاب‌شده" else "انتخاب صدا از حافظه")
+                    Text(if (selectedSoundMode == "CUSTOM") localizedText(language, "تغییر فایل صدای انتخاب‌شده", "Change selected audio", "تغيير الصوت المحدد") else localizedText(language, "انتخاب صدا از حافظه", "Choose audio from storage", "اختر صوتاً من الذاكرة"))
                 }
                 if (selectedSoundMode == "CUSTOM") {
                     Text(
@@ -1136,8 +1136,8 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("کاهش انیمیشن‌ها", color = White)
-                        Text("برای حرکت کمتر و مصرف پایین‌تر", color = Muted, fontSize = 10.sp)
+                        Text(localizedText(language, "کاهش انیمیشن‌ها", "Reduce motion", "تقليل الحركة"), color = White)
+                        Text(localizedText(language, "برای حرکت کمتر و مصرف پایین‌تر", "Less motion and lower visual activity", "حركة أقل وتأثير بصري أخف"), color = Muted, fontSize = 10.sp)
                     }
                     Switch(checked = settings.reducedMotion, onCheckedChange = { onSettingsChange(settings.copy(reducedMotion = it)) })
                 }
