@@ -18,6 +18,30 @@ class ProductivitySystemsTest {
     }
 
     @Test
+    fun habitReminderFindsNextSelectedLocalDay() {
+        val habit = HabitEntity(
+            id = 4,
+            title = "Read",
+            note = "",
+            category = "Learning",
+            scheduledDays = "SATURDAY,MONDAY",
+            reminderTime = "08:00"
+        )
+        val fridayEvening = java.time.LocalDate.parse("2026-11-06")
+            .atTime(20, 0).atZone(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli()
+        val saturdayMorning = java.time.LocalDate.parse("2026-11-07")
+            .atTime(9, 0).atZone(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli()
+        assertEquals(
+            java.time.LocalDate.parse("2026-11-07").atTime(8, 0).atZone(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli(),
+            nextHabitReminder(habit, fridayEvening, java.time.ZoneId.of("UTC"))
+        )
+        assertEquals(
+            java.time.LocalDate.parse("2026-11-09").atTime(8, 0).atZone(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli(),
+            nextHabitReminder(habit, saturdayMorning, java.time.ZoneId.of("UTC"))
+        )
+    }
+
+    @Test
     fun focusTimerRecoversAcrossBackgroundAndPause() {
         val running = FocusSessionEntity(
             startedAt = 1_000_000L,
