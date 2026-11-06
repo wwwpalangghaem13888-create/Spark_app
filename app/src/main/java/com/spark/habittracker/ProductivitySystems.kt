@@ -126,6 +126,15 @@ interface ProductivityDao {
     @Query("SELECT * FROM task_completion_history WHERE taskId = :taskId ORDER BY completedAt DESC")
     fun observeTaskHistory(taskId: Long): Flow<List<TaskCompletionEntity>>
 
+    @Query("SELECT * FROM tasks WHERE id = :taskId LIMIT 1")
+    suspend fun findTaskForCompletion(taskId: Long): TaskEntity?
+
+    @Query("SELECT id FROM tasks WHERE recurrenceParentId = :parentId AND dueDate = :date LIMIT 1")
+    suspend fun findRecurringOccurrence(parentId: Long, date: String): Long?
+
+    @Insert
+    suspend fun insertRecurringOccurrence(task: TaskEntity): Long
+
     @Insert
     suspend fun insertTaskHistory(item: TaskCompletionEntity): Long
 
@@ -185,9 +194,27 @@ interface ProductivityDao {
 
     @Transaction
     suspend fun recordTaskCompletion(taskId: Long, completed: Boolean, atMillis: Long, date: String): Boolean {
+        val task = findTaskForCompletion(taskId) ?: return false
+        if (task.archived || task.completed == completed) return false
         val changed = setTaskCompletion(taskId, completed, if (completed) atMillis else null, atMillis)
         if (changed == 0) return false
         insertTaskHistory(TaskCompletionEntity(taskId = taskId, completed = completed, activityDate = date, completedAt = atMillis))
+        if (completed && task.recurrenceRule != null && task.dueDate != null) {
+            val rootId = task.recurrenceParentId ?: task.id
+            val nextDate = runCatching { nextRecurringDate(task.recurrenceRule, LocalDate.parse(task.dueDate)) }.getOrNull()
+            if (nextDate != null && findRecurringOccurrence(rootId, nextDate.toString()) == null) {
+                insertRecurringOccurrence(task.copy(
+                    id = 0,
+                    dueDate = nextDate.toString(),
+                    completed = false,
+                    completedAt = null,
+                    archived = false,
+                    recurrenceParentId = rootId,
+                    createdAt = atMillis,
+                    updatedAt = atMillis
+                ))
+            }
+        }
         return true
     }
 
