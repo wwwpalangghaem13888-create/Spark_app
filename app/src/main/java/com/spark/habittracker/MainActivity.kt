@@ -99,26 +99,52 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
         else -> Color(0xFF9A63FF)
     }
     val background = when (settings.theme) {
+        "dark" -> Color(0xFF020304)
+        "midnight" -> Color(0xFF050A16)
+        "neon-blue" -> Color(0xFF030B12)
+        "neon-green" -> Color(0xFF050D07)
+        "neon-pink" -> Color(0xFF10040C)
+        "neon-red" -> Color(0xFF100305)
         "minimal" -> Color(0xFF101820)
-        "dark" -> Color(0xFF111318)
         "light" -> Color(0xFFF3F4F8)
         else -> Color(0xFF090716)
     }
     val surface = when (settings.theme) {
+        "dark" -> Color(0xFF0A0C0F)
+        "midnight" -> Color(0xFF0D1425)
+        "neon-blue" -> Color(0xFF071723)
+        "neon-green" -> Color(0xFF0B170E)
+        "neon-pink" -> Color(0xFF1C0A15)
+        "neon-red" -> Color(0xFF1C080B)
         "minimal" -> Color(0xFF1B2731)
-        "dark" -> Color(0xFF20232A)
         "light" -> Color(0xFFFFFFFF)
         else -> Color(0xFF151127)
     }
     val light = settings.theme == "light"
-    val palette = SparkPalette(background, surface, surface.copy(alpha = 0.78f), accent, accent.copy(alpha = 0.75f), Color(0xFF168A95), if (light) Color(0xFF626575) else Color(0xFFA9A0C2), if (light) Color(0xFF171923) else Color(0xFFF8F5FF))
+    val secondary = when (settings.theme) {
+        "neon-blue" -> Color(0xFF36CFFF)
+        "neon-green" -> Color(0xFF9BFF55)
+        "neon-pink" -> Color(0xFFFF63C7)
+        "neon-red" -> Color(0xFFFF5268)
+        else -> Color(0xFF168A95)
+    }
+    val palette = SparkPalette(
+        background, surface, surface.copy(alpha = 0.92f), accent,
+        accent.copy(alpha = 0.75f), secondary,
+        if (light) Color(0xFF626575) else Color(0xFFA9A0C2),
+        if (light) Color(0xFF171923) else Color(0xFFF8F5FF)
+    )
     CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides LayoutDirection.Rtl) {
-        val colors = if (light) lightColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.White, onBackground = palette.foreground, onSurface = palette.foreground)
-            else darkColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.Black, onBackground = palette.foreground, onSurface = palette.foreground)
+        val colors = if (light) lightColorScheme(
+            primary = accent, secondary = palette.secondary, background = background,
+            surface = surface, onPrimary = Color.White, onBackground = palette.foreground, onSurface = palette.foreground
+        ) else darkColorScheme(
+            primary = accent, secondary = palette.secondary, background = background,
+            surface = surface, onPrimary = Color.Black, onBackground = palette.foreground, onSurface = palette.foreground
+        )
         MaterialTheme(colorScheme = colors, content = content)
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
@@ -181,11 +207,11 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
                 Text("SPARK", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text(listOf("عادت‌های روزانه", "مدیریت وظایف", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها", "اهداف", "تمرکز", "پشتیبان‌گیری")[tab], color = Muted, fontSize = 12.sp)
+                Text(listOf("عادت‌های روزانه", "کارها", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها", "اهداف", "تمرکز", "پشتیبان‌گیری")[tab], color = Muted, fontSize = 12.sp)
             }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
-            listOf("خانه" to Icons.Default.Home, "وظایف" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents, "اهداف" to Icons.Default.Flag, "تمرکز" to Icons.Default.Timer, "پشتیبان" to Icons.Default.Folder).forEachIndexed { i, item ->
+            listOf("خانه" to Icons.Default.Home, "کارها" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents, "اهداف" to Icons.Default.Flag, "تمرکز" to Icons.Default.Timer, "پشتیبان" to Icons.Default.Folder).forEachIndexed { i, item ->
                 NavigationBarItem(selected = tab == i, onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
@@ -196,7 +222,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                 2 -> { editingTask = TaskEntity(title = "", dueDate = date.toString()); taskEditorOpen = true }
                 else -> { editing = null; editorOpen = true }
             }
-        }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, if (tab == 0) "افزودن عادت" else "افزودن وظیفه") } }
+        }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, if (tab == 0) "افزودن عادت" else "افزودن کار") } }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
@@ -381,13 +407,13 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
         } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Metric("وظایف امروز", tasksDueToday.size.toString(), Modifier.weight(1f))
+                Metric("کارهای امروز", tasksDueToday.size.toString(), Modifier.weight(1f))
                 Metric("تکمیل امروز", completedTasksToday.toString(), Modifier.weight(1f))
                 Metric("تمرکز", focusMinutesToday.toString() + " دقیقه", Modifier.weight(1f))
             }
         }
-        item { Text("وظایف نزدیک", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
-        if (tasksDueToday.isEmpty()) item { Text("برای امروز وظیفهٔ زمان‌بندی‌شده‌ای وجود ندارد.", color = Muted, fontSize = 12.sp) }
+        item { Text("کارهای پیش رو", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        if (tasksDueToday.isEmpty()) item { Text("برای امروز کاری زمان‌بندی نشده است.", color = Muted, fontSize = 12.sp) }
         else items(tasksDueToday.take(3), key = { "task-" + it.id }) { task ->
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (task.completed) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = if (task.completed) Cyan else Muted)
@@ -498,9 +524,9 @@ private fun Statistics(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetricCard("تکمیل وظایف", report.completedTasks.toString(), Modifier.weight(1f))
+                MetricCard("کارهای تکمیل‌شده", report.completedTasks.toString(), Modifier.weight(1f))
                 MetricCard("زمان تمرکز", (report.focusSeconds / 60).toString() + " دقیقه", Modifier.weight(1f))
-                MetricCard("وظایف باز", tasks.count { !it.completed && !it.archived }.toString(), Modifier.weight(1f))
+                MetricCard("کارهای باز", tasks.count { !it.completed && !it.archived }.toString(), Modifier.weight(1f))
             }
         }
         item {
@@ -532,8 +558,8 @@ private fun Statistics(
                             .let { it >= report.startDate && it <= report.endDate }
                 }
                 Text("جلسات تمرکز در این دوره: " + periodSessions, color = Muted, fontSize = 12.sp)
-                Text("وظایف فعال: " + tasks.count { !it.completed && !it.archived }, color = Muted, fontSize = 12.sp)
-                Text("وظایف تکمیل‌شده در بازه: " + report.completedTasks, color = Muted, fontSize = 12.sp)
+                Text("کارهای فعال: " + tasks.count { !it.completed && !it.archived }, color = Muted, fontSize = 12.sp)
+                Text("کارهای تکمیل‌شده در بازه: " + report.completedTasks, color = Muted, fontSize = 12.sp)
                 if (report.days.all { it.completedHabits + it.completedTasks == 0 && it.focusSeconds == 0L }) {
                     Text("در این بازه هنوز فعالیتی ثبت نشده است؛ نبود داده با عملکرد صفر یکسان نیست.", color = Violet, fontSize = 11.sp)
                 }
@@ -607,14 +633,14 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                     Box(Modifier.fillMaxWidth(xpInLevel / 100f).fillMaxHeight().clip(CircleShape).background(Brush.horizontalGradient(listOf(Violet, Cyan))))
                 }
                 Text("$xpInLevel از ۱۰۰ XP تا سطح بعدی", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-                Text("هر تکمیل یکتای عادت یا وظیفه در روز = ۱۰ XP. امتیازها از سوابق ذخیره‌شده محاسبه می‌شوند.", color = Muted, fontSize = 10.sp)
+                Text("هر تکمیل یکتای عادت یا کار در روز = ۱۰ XP. امتیازها از سوابق ذخیره‌شده محاسبه می‌شوند.", color = Muted, fontSize = 10.sp)
             }
         }
         item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
                 Text("چالش امروز", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Spacer(Modifier.height(6.dp))
-                Text(if (challengeTarget == 0) "برای شروع، یک وظیفه یا عادت زمان‌بندی کن." else "تکمیل $challengeTarget فعالیت امروز", color = Muted, fontSize = 12.sp)
+                Text(if (challengeTarget == 0) "برای شروع، یک عادت یا کار ثبت کن." else "تکمیل $challengeTarget فعالیت امروز", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(10.dp))
                 LinearProgressIndicator(progress = challengeProgress, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color = Cyan, trackColor = PanelAlt)
                 Text(if (challengeTarget == 0) "بدون فعالیت برنامه‌ریزی‌شده" else "$challengeDone از $challengeTarget", color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
@@ -623,7 +649,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
         item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
                 Text("چالش هفتگی", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text("هدف: ۱۰ تکمیل یکتای عادت یا وظیفه در هفت روز اخیر", color = Muted, fontSize = 11.sp)
+                Text("هدف: ۱۰ تکمیل یکتای عادت یا کار در هفت روز اخیر", color = Muted, fontSize = 11.sp)
                 Spacer(Modifier.height(9.dp))
                 LinearProgressIndicator(progress = weeklyProgress, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color = Violet, trackColor = PanelAlt)
                 Text("$weeklyDone از $weeklyTarget فعالیت", color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
@@ -658,9 +684,34 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("ظاهر برنامه", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Text("تم", color = Muted, fontSize = 12.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    listOf("neon" to "نئون", "dark" to "تیره", "minimal" to "مینیمال", "light" to "روشن").forEach { (key, label) ->
-                        FilterChip(selected = settings.theme == key, onClick = { onSettingsChange(settings.copy(theme = key)) }, label = { Text(label) })
+                val themeOptions = listOf(
+                    "neon" to "نئون بنفش",
+                    "dark" to "مشکی عمیق",
+                    "midnight" to "نیمه‌شب",
+                    "neon-blue" to "نئون آبی",
+                    "neon-green" to "نئون سبز",
+                    "neon-pink" to "نئون صورتی",
+                    "neon-red" to "نئون قرمز",
+                    "minimal" to "مینیمال",
+                    "light" to "روشن"
+                )
+                themeOptions.chunked(3).forEach { group ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        group.forEach { (key, label) ->
+                            FilterChip(
+                                selected = settings.theme == key,
+                                onClick = {
+                                    val themeAccent = when (key) {
+                                        "neon-blue" -> "cyan"
+                                        "neon-green" -> "lime"
+                                        "neon-pink", "neon-red" -> "pink"
+                                        else -> settings.accent
+                                    }
+                                    onSettingsChange(settings.copy(theme = key, accent = themeAccent))
+                                },
+                                label = { Text(label) }
+                            )
+                        }
                     }
                 }
                 Text("رنگ تأکیدی", color = Muted, fontSize = 12.sp)
@@ -690,88 +741,128 @@ private fun HabitEditor(
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
-    val initialTime = remember(initial) {
-        runCatching { java.time.LocalTime.parse(initial?.reminderTime ?: "08:00") }
-            .getOrElse { java.time.LocalTime.of(8, 0) }
-    }
-    var selectedHour by remember(initial) { mutableStateOf(initialTime.hour) }
-    var selectedMinute by remember(initial) { mutableStateOf(initialTime.minute) }
-    var draftHour by remember(initial) { mutableStateOf(initialTime.hour) }
-    var draftMinute by remember(initial) { mutableStateOf(initialTime.minute) }
-    var showTimePicker by remember { mutableStateOf(false) }
     val days = listOf(
         "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
         "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
     )
     var selectedDays by remember(initial) {
-        mutableStateOf(initial?.scheduledDays?.split(",")?.map { it.trim().uppercase(Locale.ROOT) }?.filter { it.isNotBlank() }?.toSet() ?: emptySet())
+        mutableStateOf(
+            initial?.scheduledDays?.split(",")?.map { it.trim().uppercase(Locale.ROOT) }
+                ?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+        )
     }
+    var reminderEnabled by remember(initial) {
+        mutableStateOf(initial?.reminderTime?.isNotBlank() == true)
+    }
+    var selectedTime by remember(initial) {
+        mutableStateOf(initial?.reminderTime?.takeIf { it.isNotBlank() })
+    }
+    val initialTime = remember(initial) {
+        runCatching { java.time.LocalTime.parse(initial?.reminderTime.orEmpty()) }
+            .getOrNull()
+    }
+    var draftHour by remember(initial) { mutableIntStateOf(initialTime?.hour ?: 0) }
+    var draftMinute by remember(initial) { mutableIntStateOf(initialTime?.minute ?: 0) }
+    var showTimePicker by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = dismiss, containerColor = Panel,
+
+    AlertDialog(
+        onDismissRequest = dismiss,
+        containerColor = Panel,
         title = { Text(if (initial == null) "عادت جدید" else "ویرایش عادت", color = White) },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            OutlinedTextField(title, { title = it; error = null }, label = { Text("عنوان عادت") }, singleLine = true)
-            OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
-            OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, minLines = 2)
-            Text("روزهای برنامه")
-            days.chunked(4).forEach { group ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    group.forEach { (key, label) ->
-                        val selected = key in selectedDays
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                selectedDays = if (selected) selectedDays - key else selectedDays + key
-                                error = null
-                            },
-                            label = { Text(label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = Color.Transparent,
-                                labelColor = Muted,
-                                selectedContainerColor = Color(0xFF1976D2),
-                                selectedLabelColor = Color.White
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                if (selected) Color(0xFF1976D2) else Muted.copy(alpha = 0.65f)
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                OutlinedTextField(title, { title = it; error = null }, label = { Text("نام عادت") }, singleLine = true)
+                OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
+                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, minLines = 2)
+
+                Text("روزهای تکرار عادت", color = White, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "عادت برای کارهایی است که مرتب انجام می‌دهی. برای خرید یا کار یک‌باره، از بخش «کارها» استفاده کن.",
+                    color = Muted, fontSize = 11.sp
+                )
+                days.chunked(4).forEach { group ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        group.forEach { (key, label) ->
+                            val selected = key in selectedDays
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    selectedDays = if (selected) selectedDays - key else selectedDays + key
+                                    error = null
+                                },
+                                label = { Text(label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = Color.Transparent,
+                                    labelColor = Muted,
+                                    selectedContainerColor = Color(0xFF1976D2),
+                                    selectedLabelColor = Color.White
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (selected) Color(0xFF1976D2) else Muted.copy(alpha = 0.65f)
+                                )
                             )
-                        )
+                        }
                     }
                 }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("یادآوری ساعت‌دار", color = White)
+                        Text("اختیاری است؛ اگر ساعت انتخاب نکنی، یادآوری تنظیم نمی‌شود.", color = Muted, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = reminderEnabled,
+                        onCheckedChange = {
+                            reminderEnabled = it
+                            if (!it) selectedTime = null
+                        }
+                    )
+                }
+                if (reminderEnabled) {
+                    OutlinedButton(
+                        onClick = {
+                            val parts = selectedTime?.split(":")
+                            draftHour = parts?.getOrNull(0)?.toIntOrNull() ?: 0
+                            draftMinute = parts?.getOrNull(1)?.toIntOrNull() ?: 0
+                            showTimePicker = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, Muted.copy(alpha = 0.55f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = White)
+                    ) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF42A5F5))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            selectedTime ?: "انتخاب ساعت",
+                            color = if (selectedTime == null) Muted else White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text("تنظیم", color = Color(0xFF64B5F6), fontSize = 12.sp)
+                    }
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
             }
-            Text("ساعت یادآوری", color = Muted, fontSize = 12.sp)
-            OutlinedButton(
-                onClick = {
-                    draftHour = selectedHour
-                    draftMinute = selectedMinute
-                    showTimePicker = true
-                },
-                modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(1.dp, Muted.copy(alpha = 0.55f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = White)
-            ) {
-                Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF42A5F5))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    String.format(Locale.ROOT, "%02d:%02d", selectedHour, selectedMinute),
-                    color = White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.weight(1f))
-                Text("تغییر ساعت", color = Color(0xFF64B5F6), fontSize = 12.sp)
-            }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
-        } },
-        confirmButton = { TextButton(onClick = {
-            if (title.isBlank()) error = "عنوان نمی‌تواند خالی باشد."
-            else if (selectedDays.isEmpty()) error = "حداقل یک روز انتخاب کن."
-            else {
-                val reminderTime = String.format(Locale.ROOT, "%02d:%02d", selectedHour, selectedMinute)
-                save(title, note, category, days.filter { it.first in selectedDays }.joinToString(",") { it.first }, reminderTime)
-            }
-        }) { Text("ذخیره", color = Violet) } },
-        dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } })
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (title.isBlank()) error = "عنوان نمی‌تواند خالی باشد."
+                else if (selectedDays.isEmpty()) error = "حداقل یک روز برای تکرار عادت انتخاب کن."
+                else {
+                    save(
+                        title, note, category,
+                        days.filter { it.first in selectedDays }.joinToString(",") { it.first },
+                        if (reminderEnabled) selectedTime.orEmpty() else ""
+                    )
+                }
+            }) { Text("ذخیره", color = Violet) }
+        },
+        dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } }
+    )
+
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
@@ -830,8 +921,7 @@ private fun HabitEditor(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    selectedHour = draftHour
-                    selectedMinute = draftMinute
+                    selectedTime = String.format(Locale.ROOT, "%02d:%02d", draftHour, draftMinute)
                     showTimePicker = false
                 }) { Text("تأیید", color = Color(0xFF64B5F6)) }
             },

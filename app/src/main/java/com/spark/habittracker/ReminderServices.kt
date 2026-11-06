@@ -24,6 +24,7 @@ import java.time.ZoneId
 
 internal fun nextHabitReminder(habit: HabitEntity, afterMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): Long? {
     if (!habit.isEnabled) return null
+    if (habit.reminderTime.isBlank()) return null
     val time = runCatching { LocalTime.parse(habit.reminderTime) }.getOrNull() ?: return null
     val after = Instant.ofEpochMilli(afterMillis).atZone(zoneId)
     val scheduled = habit.scheduledDays.split(",").map { it.trim() }.toSet()
@@ -89,7 +90,7 @@ object ReminderScheduler {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.spark_logo)
             .setContentTitle("یادآوری Spark")
-            .setContentText(if (ownerType == "TASK") "زمان انجام وظیفه‌ات رسیده است." else "یادآوری برنامه‌ریزی‌شده")
+            .setContentText(if (ownerType == "TASK") "زمان انجام این کار رسیده است." else "یادآوری برنامه‌ریزی‌شده")
             .setContentIntent(openIntent)
             .setAutoCancel(true)
             .addAction(0, "تعویق ۱۰ دقیقه", snoozeIntent)

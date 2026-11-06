@@ -87,7 +87,7 @@ fun TaskListScreen(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("مدیریت وظایف", style = MaterialTheme.typography.headlineSmall)
+        Text("کارها", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
@@ -112,8 +112,8 @@ fun TaskListScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(Icons.Default.AddTask, contentDescription = null)
-                Text(if (sourceTasks.isEmpty()) if (showArchived) "وظیفهٔ بایگانی‌شده‌ای وجود ندارد." else "هنوز وظیفه‌ای ثبت نشده." else "موردی با این فیلتر پیدا نشد.")
-                Text("برای ثبت اولین وظیفه از دکمه افزودن استفاده کن.")
+                Text(if (sourceTasks.isEmpty()) if (showArchived) "کار بایگانی‌شده‌ای وجود ندارد." else "هنوز کاری ثبت نشده." else "موردی با این فیلتر پیدا نشد.")
+                Text("برای ثبت اولین کار از دکمه افزودن استفاده کن.")
             }
         } else {
             LazyColumn(
@@ -161,7 +161,7 @@ private fun TaskCard(
         IconButton(onClick = onToggle) {
             Icon(
                 if (task.completed) Icons.Default.CheckCircle else Icons.Default.Circle,
-                contentDescription = if (task.completed) "بازگرداندن وظیفه" else "تکمیل وظیفه",
+                contentDescription = if (task.completed) "بازگرداندن کار" else "تکمیل کار",
                 tint = if (task.completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -198,7 +198,7 @@ private fun TaskCard(
                     onClick = { menuOpen = false; onManageSubtasks() }
                 )
                 DropdownMenuItem(
-                    text = { Text("تکثیر وظیفه") },
+                    text = { Text("کپی کار") },
                     onClick = { menuOpen = false; onDuplicate() }
                 )
                 DropdownMenuItem(
@@ -216,7 +216,7 @@ private fun TaskCard(
     }
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
-        title = { Text("حذف دائمی وظیفه؟") },
+        title = { Text("حذف دائمی کار؟") },
         text = { Text("این عملیات قابل بازگشت نیست و زیرکارها و تاریخچهٔ وابسته نیز حذف می‌شوند.") },
         confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("حذف") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("انصراف") } }
@@ -231,7 +231,7 @@ private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: ()
     var title by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("زیرکارهای وظیفه") },
+        title = { Text("زیرکارهای این کار") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(title, { title = it }, label = { Text("عنوان زیرکار") }, singleLine = true)
@@ -294,7 +294,7 @@ fun TaskEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null || initial.id == 0L) "وظیفه جدید" else "ویرایش وظیفه") },
+        title = { Text(if (initial == null || initial.id == 0L) "کار جدید" else "ویرایش کار") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(title, { title = it; error = null }, label = { Text("عنوان") }, singleLine = true)
@@ -303,7 +303,8 @@ fun TaskEditorDialog(
                 OutlinedTextField(dueDate, { dueDate = it; error = null }, label = { Text("مهلت (YYYY-MM-DD، اختیاری)") }, singleLine = true)
                 OutlinedTextField(startAt, { startAt = it; error = null }, label = { Text("زمان شروع (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
                 OutlinedTextField(endAt, { endAt = it; error = null }, label = { Text("زمان پایان (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
-                Text("نوع وظیفه")
+                Text("این کار تکرار می‌شود؟")
+                Text("برای خرید، تماس و کارهای یک‌باره گزینه «یک‌باره» را نگه دار.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = recurrence == null,
@@ -364,7 +365,7 @@ fun TaskEditorDialog(
         confirmButton = {
             Button(onClick = {
                 if (title.isBlank()) {
-                    error = "عنوان وظیفه نمی‌تواند خالی باشد."
+                    error = "عنوان کار نمی‌تواند خالی باشد."
                 } else {
                     val normalizedDate = dueDate.trim().ifBlank { null }
                     try {
@@ -381,7 +382,7 @@ fun TaskEditorDialog(
                             "زمان پایان باید بعد از زمان شروع باشد."
                         }
                         require(recurrence == null || normalizedDate != null) {
-                            "برای وظیفه تکرارشونده باید تاریخ شروع تعیین شود."
+                            "برای کار تکرارشونده باید تاریخ شروع تعیین شود."
                         }
                         require(recurrence != "WEEKLY" || weeklyDays.isNotEmpty()) {
                             "برای تکرار هفتگی حداقل یک روز انتخاب کن."
