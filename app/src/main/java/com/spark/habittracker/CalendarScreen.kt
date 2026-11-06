@@ -1,5 +1,8 @@
 package com.spark.habittracker
 
+import android.icu.text.SimpleDateFormat as IcuSimpleDateFormat
+import android.icu.util.PersianCalendar
+import android.icu.util.ULocale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +42,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import java.util.Date
+import java.util.TimeZone
 
 private enum class CalendarMode { DAY, WEEK, MONTH }
 
@@ -55,9 +60,7 @@ fun SparkCalendarScreen(
     var modeIndex by remember { mutableIntStateOf(2) }
     val mode = CalendarMode.entries[modeIndex]
     val locale = Locale("fa")
-    val monthLabel = remember(selectedDate) {
-        selectedDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", locale))
-    }
+    val monthLabel = remember(selectedDate) { persianDateLabel(selectedDate, "MMMM yyyy") }
     val today = LocalDate.now()
     val doneIds = logs.filter { it.date == selectedDate.toString() && it.isCompleted }
         .map { it.habitId }.toSet()
@@ -103,7 +106,7 @@ fun SparkCalendarScreen(
                 })
             }) { Icon(Icons.Default.ChevronRight, contentDescription = "بازه قبل") }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (mode == CalendarMode.MONTH) monthLabel else selectedDate.toString(), style = MaterialTheme.typography.titleMedium)
+                Text(if (mode == CalendarMode.MONTH) monthLabel else persianDateLabel(selectedDate, "d MMMM yyyy"), style = MaterialTheme.typography.titleMedium)
                 Text(if (selectedDate == today) "امروز" else selectedDate.dayOfWeek.getDisplayName(TextStyle.FULL, locale), style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = {
@@ -144,7 +147,7 @@ fun SparkCalendarScreen(
                                     .clickable { onDateChange(date) }.padding(vertical = 7.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(date.dayOfMonth.toString(), style = MaterialTheme.typography.bodyMedium)
+                                Text(persianDateLabel(date, "d"), style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     if (habitCount + taskCount == 0) " " else "•".repeat(minOf(3, habitCount + taskCount)),
                                     color = MaterialTheme.colorScheme.primary,
@@ -156,7 +159,7 @@ fun SparkCalendarScreen(
                 }
             }
         }
-        Text("برنامه ${selectedDate}", style = MaterialTheme.typography.titleMedium)
+        Text("برنامه " + persianDateLabel(selectedDate, "d MMMM yyyy"), style = MaterialTheme.typography.titleMedium)
         if (dayHabits.isEmpty() && dayTasks.isEmpty()) {
             Text("برای این روز برنامه‌ای ثبت نشده است.", style = MaterialTheme.typography.bodyMedium)
         } else {
@@ -192,4 +195,14 @@ fun SparkCalendarScreen(
             }
         }
     }
+}
+
+
+private fun persianDateLabel(date: LocalDate, pattern: String): String {
+    val millis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val calendar = PersianCalendar(TimeZone.getDefault(), ULocale("fa_IR"))
+    calendar.timeInMillis = millis
+    val formatter = IcuSimpleDateFormat(pattern, ULocale("fa_IR"))
+    formatter.calendar = calendar
+    return formatter.format(Date(millis))
 }
