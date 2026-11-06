@@ -141,6 +141,9 @@ interface ProductivityDao {
     @Query("SELECT * FROM goals WHERE archived = 0 ORDER BY targetDate IS NULL, targetDate")
     fun observeGoals(): Flow<List<GoalEntity>>
 
+    @Query("SELECT * FROM focus_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
+    fun observeActiveFocusSession(): Flow<FocusSessionEntity?>
+
     @Insert
     suspend fun insertGoal(goal: GoalEntity): Long
 
