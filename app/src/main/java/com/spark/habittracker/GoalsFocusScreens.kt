@@ -17,8 +17,8 @@ import java.time.LocalDate
 import java.util.Locale
 
 @Composable
-fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<HabitEntity>, modifier: Modifier = Modifier) {
-    val goals by dao.observeGoals().collectAsState(initial = emptyList())
+fun GoalsScreen(repository: ProductivityRepository, tasks: List<TaskEntity>, habits: List<HabitEntity>, modifier: Modifier = Modifier) {
+    val goals by repository.observeGoals().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var editorOpen by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
@@ -48,8 +48,8 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
             }
         }
         items(goals, key = { it.id }) { goal ->
-            val linkedIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = dao.linkedTaskIds(goal.id) }
-            val linkedHabitIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = dao.linkedHabitIds(goal.id) }
+            val linkedIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = repository.linkedTaskIds(goal.id) }
+            val linkedHabitIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = repository.linkedHabitIds(goal.id) }
             val linkedTasks = tasks.filter { it.id in linkedIds }
             val endDate = goal.targetDate?.let { LocalDate.parse(it) } ?: LocalDate.now()
             val startDate = LocalDate.parse(goal.startDate)
@@ -57,9 +57,9 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
             val startMillis = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
             val endMillis = endDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
             val completed by produceState(initialValue = 0, goal.id, tasks, linkedHabitIds, startDate, endDate) {
-                value = dao.completedLinkedTasks(
+                value = repository.completedLinkedTasks(
                     goal.id, startDate.toString(), endDate.toString(), startMillis, endMillis
-                ) + dao.completedLinkedHabits(goal.id, startDate.toString(), endDate.toString())
+                ) + repository.completedLinkedHabits(goal.id, startDate.toString(), endDate.toString())
             }
             val progress = goalProgressRatio(completed, goal.targetValue)
             Card {
@@ -70,7 +70,7 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
                     Text(completed.toString() + " از " + goal.targetValue.toInt() + " فعالیت مرتبط", style = MaterialTheme.typography.bodySmall)
                     LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(8.dp))
                     Text((progress * 100).toInt().toString() + "٪ • " + linkedTasks.size + " وظیفه و " + linkedHabitIds.size + " عادت متصل", style = MaterialTheme.typography.labelSmall)
-                    TextButton(onClick = { scope.launch { dao.archiveGoal(goal.id, System.currentTimeMillis()) } }) { Text("بایگانی هدف") }
+                    TextButton(onClick = { scope.launch { repository.archiveGoal(goal.id, System.currentTimeMillis()) } }) { Text("بایگانی هدف") }
                 }
             }
         }
@@ -120,10 +120,12 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
                         error = "تاریخ هدف نمی‌تواند قبل از امروز باشد."
                         return@launch
                     }
-                    val id = dao.insertGoal(GoalEntity(title = title.trim(), description = description.trim(),
-                        targetValue = parsedTarget, startDate = LocalDate.now().toString(), targetDate = parsedDate?.toString()))
-                    selectedTaskIds.forEach { dao.linkTaskToGoal(GoalTaskLinkEntity(id, it)) }
-                    selectedHabitIds.forEach { dao.linkHabitToGoal(GoalHabitLinkEntity(id, it)) }
+                    repository.createGoal(
+                        GoalEntity(title = title.trim(), description = description.trim(),
+                            targetValue = parsedTarget, startDate = LocalDate.now().toString(), targetDate = parsedDate?.toString()),
+                        selectedTaskIds,
+                        selectedHabitIds
+                    )
                     editorOpen = false
                 }
             }) { Text("ذخیره") }
@@ -133,8 +135,8 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, habits: List<Habi
 }
 
 @Composable
-fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
-    val session by dao.observeActiveFocusSession().collectAsState(initial = null)
+fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifier) {
+    val session by repository.observeActiveFocusSession().collectAsState(initial = null)
     val activeSession = session
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -161,14 +163,14 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
         if (current != null && current.mode != "STOPWATCH" &&
             current.pausedAt == null && remaining == 0L
         ) {
-            val changed = dao.finishFocusSession(
+            val changed = repository.finishFocusSession(
                 current.id,
                 current.plannedDurationSeconds,
                 true,
                 System.currentTimeMillis()
             )
             if (changed > 0) {
-                dao.disableRemindersForOwner("FOCUS", current.id)
+                repository.disableRemindersForOwner("FOCUS", current.id)
                 lastSessionCompleted = true
             }
         }
@@ -204,10 +206,10 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
             Button(onClick = { lastSessionCompleted = false; scope.launch {
                 val start = System.currentTimeMillis()
                 val planned = if (selectedMode == "STOPWATCH") 31_536_000L else selectedMinutes * 60
-                val id = dao.insertFocusSession(FocusSessionEntity(mode = selectedMode, startedAt = start, plannedDurationSeconds = planned))
+                val id = repository.insertFocusSession(FocusSessionEntity(mode = selectedMode, startedAt = start, plannedDurationSeconds = planned))
                 if (selectedMode != "STOPWATCH") {
                     val reminder = ReminderEntity(ownerType = "FOCUS", ownerId = id, triggerAt = start + planned * 1000)
-                    val reminderId = dao.insertReminder(reminder)
+                    val reminderId = repository.insertReminder(reminder)
                     ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                 }
             } }) { Text(if (selectedMode == "STOPWATCH") "شروع کرنومتر" else "شروع جلسه") }
@@ -228,24 +230,24 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
             if (activeSession.mode != "STOPWATCH") LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (activeSession.pausedAt == null) Button(onClick = { scope.launch {
-                    dao.updateFocusPause(activeSession.id, now, activeSession.accumulatedPausedSeconds)
-                    dao.disableRemindersForOwner("FOCUS", activeSession.id)
+                    repository.updateFocusPause(activeSession.id, now, activeSession.accumulatedPausedSeconds)
+                    repository.disableRemindersForOwner("FOCUS", activeSession.id)
                 } }) { Text("مکث") }
                 else Button(onClick = { scope.launch {
                     val pausedSeconds = ((now - (activeSession.pausedAt ?: now)) / 1000).coerceAtLeast(0)
-                    dao.updateFocusPause(activeSession.id, null, activeSession.accumulatedPausedSeconds + pausedSeconds)
+                    repository.updateFocusPause(activeSession.id, null, activeSession.accumulatedPausedSeconds + pausedSeconds)
                     val left = if (activeSession.mode == "STOPWATCH") 0L else remaining ?: 0L
                     if (left > 0) {
-                        dao.deleteRemindersForOwner("FOCUS", activeSession.id)
+                        repository.deleteRemindersForOwner("FOCUS", activeSession.id)
                         val reminder = ReminderEntity(ownerType = "FOCUS", ownerId = activeSession.id, triggerAt = now + left * 1000)
-                        val reminderId = dao.insertReminder(reminder)
+                        val reminderId = repository.insertReminder(reminder)
                         ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                     }
                 } }) { Text("ادامه") }
                 TextButton(onClick = { scope.launch {
                     val actual = if (activeSession.mode == "STOPWATCH") elapsed else (activeSession.plannedDurationSeconds - (remaining ?: 0L)).coerceAtLeast(0)
-                    dao.finishFocusSession(activeSession.id, actual, activeSession.mode == "STOPWATCH" || remaining == 0L, now)
-                    dao.disableRemindersForOwner("FOCUS", activeSession.id)
+                    repository.finishFocusSession(activeSession.id, actual, activeSession.mode == "STOPWATCH" || remaining == 0L, now)
+                    repository.disableRemindersForOwner("FOCUS", activeSession.id)
                 } }) { Text("پایان جلسه") }
             }
             if (activeSession.mode != "STOPWATCH" && remaining == 0L) Text("زمان جلسه تمام شد.", color = MaterialTheme.colorScheme.primary)
