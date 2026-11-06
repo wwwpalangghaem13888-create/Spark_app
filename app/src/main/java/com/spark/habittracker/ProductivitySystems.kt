@@ -296,7 +296,13 @@ interface ProductivityDao {
         if (completed) disableRemindersForOwner("TASK", taskId)
         if (completed && task.recurrenceRule != null && task.dueDate != null) {
             val rootId = task.recurrenceParentId ?: task.id
-            val nextDate = runCatching { nextRecurringDate(task.recurrenceRule, LocalDate.parse(task.dueDate)) }.getOrNull()
+            val currentDueDate = LocalDate.parse(task.dueDate)
+            val anchorDay = findTaskForCompletion(rootId)?.dueDate
+                ?.let { runCatching { LocalDate.parse(it).dayOfMonth }.getOrNull() }
+                ?: currentDueDate.dayOfMonth
+            val nextDate = runCatching {
+                nextRecurringDate(task.recurrenceRule, currentDueDate, anchorDay)
+            }.getOrNull()
             if (nextDate != null && findRecurringOccurrence(rootId, nextDate.toString()) == null) {
                 insertRecurringOccurrence(task.copy(
                     id = 0,
@@ -319,7 +325,11 @@ interface ProductivityDao {
 }
 
 /** Pure recurrence rules; dates are local calendar dates, not elapsed 24-hour periods. */
-internal fun nextRecurringDate(rule: String?, from: LocalDate): LocalDate? = when (rule?.uppercase()) {
+internal fun nextRecurringDate(
+    rule: String?,
+    from: LocalDate,
+    preferredDayOfMonth: Int = from.dayOfMonth
+): LocalDate? = when (rule?.uppercase()) {
     "DAILY" -> from.plusDays(1)
     "WEEKLY" -> from.plusWeeks(1)
     "WEEKDAYS" -> {
@@ -329,7 +339,7 @@ internal fun nextRecurringDate(rule: String?, from: LocalDate): LocalDate? = whe
     }
     "MONTHLY" -> {
         val nextMonth = YearMonth.from(from).plusMonths(1)
-        nextMonth.atDay(minOf(from.dayOfMonth, nextMonth.lengthOfMonth()))
+        nextMonth.atDay(minOf(preferredDayOfMonth.coerceIn(1, 31), nextMonth.lengthOfMonth()))
     }
     else -> null
 }

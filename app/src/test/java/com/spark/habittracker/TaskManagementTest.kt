@@ -7,6 +7,18 @@ import org.junit.Test
 import java.time.LocalDate
 
 class TaskManagementTest {
+
+    @Test
+    fun taskReminderOnlySchedulesForOpenUnarchivedTasksInTheFuture() {
+        val now = 1_000_000L
+        val task = TaskEntity(id = 1, title = "Study", reminderAt = now + 60_000L)
+        assertEquals(now + 60_000L, taskReminderTriggerAt(task, now))
+        assertEquals(null, taskReminderTriggerAt(task.copy(completed = true), now))
+        assertEquals(null, taskReminderTriggerAt(task.copy(archived = true), now))
+        assertEquals(null, taskReminderTriggerAt(task.copy(reminderAt = now), now))
+        assertEquals(null, taskReminderTriggerAt(task.copy(reminderAt = null), now))
+    }
+
     @Test
     fun overdueRequiresAnUncompletedTaskWithPastDeadline() {
         val yesterday = LocalDate.now().minusDays(1).toString()

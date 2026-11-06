@@ -315,7 +315,11 @@ fun TaskEditorDialog(
                         val normalizedStart = startAt.trim().ifBlank { null }?.let(::parseTaskTime)
                         val normalizedEnd = endAt.trim().ifBlank { null }?.let(::parseTaskTime)
                         val normalizedReminder = reminderAt.trim().ifBlank { null }?.let(::parseTaskTime)
-                        require(normalizedReminder == null || normalizedReminder > System.currentTimeMillis()) { "زمان یادآوری باید در آینده باشد." }
+                        require(
+                            normalizedReminder == null ||
+                                normalizedReminder > System.currentTimeMillis() ||
+                                normalizedReminder == initial?.reminderAt
+                        ) { "زمان یادآوری جدید باید در آینده باشد." }
                         require(normalizedStart == null || normalizedEnd == null || normalizedEnd > normalizedStart) {
                             "زمان پایان باید بعد از زمان شروع باشد."
                         }

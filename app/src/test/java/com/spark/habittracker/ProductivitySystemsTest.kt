@@ -13,6 +13,14 @@ class ProductivitySystemsTest {
         assertEquals(LocalDate.parse("2026-11-13"), nextRecurringDate("WEEKLY", LocalDate.parse("2026-11-06")))
         assertEquals(LocalDate.parse("2026-11-09"), nextRecurringDate("WEEKDAYS", LocalDate.parse("2026-11-06")))
         assertEquals(LocalDate.parse("2027-02-28"), nextRecurringDate("MONTHLY", LocalDate.parse("2027-01-31")))
+        assertEquals(
+            LocalDate.parse("2027-03-31"),
+            nextRecurringDate("MONTHLY", LocalDate.parse("2027-02-28"), preferredDayOfMonth = 31)
+        )
+        assertEquals(
+            LocalDate.parse("2027-04-30"),
+            nextRecurringDate("MONTHLY", LocalDate.parse("2027-03-31"), preferredDayOfMonth = 31)
+        )
         assertEquals(null, nextRecurringDate("UNKNOWN", LocalDate.parse("2026-11-06")))
         assertEquals(null, nextRecurringDate(null, LocalDate.parse("2026-11-06")))
     }

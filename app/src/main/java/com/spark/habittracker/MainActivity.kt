@@ -414,8 +414,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                 1 -> TaskListScreen(
                     tasks = tasks,
                     onToggle = { task, completed -> scope.launch {
-                        db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), LocalDate.now().toString())
-                        SparkWidgetProvider.refreshAll(context)
+                        recordTaskCompletionAndSyncReminder(context, db, task.id, completed)
                     } },
                     onEdit = { editingTask = it; taskEditorOpen = true },
                     onArchive = { task -> scope.launch {
@@ -431,7 +430,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     onDuplicate = { task -> scope.launch { taskRepository.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
                     onRestore = { task -> scope.launch {
                         taskRepository.restore(task.id)
-                        task.reminderAt?.takeIf { it > System.currentTimeMillis() }?.let { triggerAt ->
+                        taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
                             db.productivityDao().deleteRemindersForOwner("TASK", task.id)
                             val reminder = ReminderEntity(ownerType = "TASK", ownerId = task.id, triggerAt = triggerAt)
                             val reminderId = db.productivityDao().insertReminder(reminder)
@@ -455,8 +454,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     },
                     onToggleTask = { task, completed ->
                         scope.launch {
-                            db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), LocalDate.now().toString())
-                            SparkWidgetProvider.refreshAll(context)
+                            recordTaskCompletionAndSyncReminder(context, db, task.id, completed)
                         }
                     }
                 )
@@ -495,7 +493,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             scope.launch {
                 val taskId = taskRepository.save(task)
                 db.productivityDao().deleteRemindersForOwner("TASK", taskId)
-                task.reminderAt?.let { triggerAt ->
+                taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
                     val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
                     val reminderId = db.productivityDao().insertReminder(reminder)
                     ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
@@ -506,6 +504,30 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             }
         }
     )
+}
+
+
+private suspend fun recordTaskCompletionAndSyncReminder(
+    context: android.content.Context,
+    db: SparkDatabase,
+    taskId: Long,
+    completed: Boolean
+) {
+    val now = System.currentTimeMillis()
+    val dao = db.productivityDao()
+    val changed = dao.recordTaskCompletion(taskId, completed, now, LocalDate.now().toString())
+    if (changed && !completed) {
+        // A completion disables its one-shot reminder. Reopening the task must
+        // recreate the alarm if its configured reminder time is still in the future.
+        dao.deleteRemindersForOwner("TASK", taskId)
+        val task = db.taskDao().findById(taskId)
+        task?.let { taskReminderTriggerAt(it, now) }?.let { triggerAt ->
+            val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
+            val reminderId = dao.insertReminder(reminder)
+            ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+        }
+    }
+    SparkWidgetProvider.refreshAll(context)
 }
 
 @Composable

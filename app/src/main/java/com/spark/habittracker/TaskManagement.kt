@@ -158,6 +158,9 @@ class TaskRepository(private val dao: TaskDao) {
     }
 }
 
+internal fun taskReminderTriggerAt(task: TaskEntity, nowMillis: Long): Long? =
+    task.reminderAt?.takeIf { it > nowMillis && !task.completed && !task.archived }
+
 internal fun taskIsOverdue(task: TaskEntity, today: LocalDate): Boolean =
     !task.archived && !task.completed && task.dueDate?.let { runCatching { LocalDate.parse(it).isBefore(today) }.getOrDefault(false) } == true
 
