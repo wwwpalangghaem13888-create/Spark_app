@@ -2,7 +2,10 @@ package com.spark.habittracker
 
 import android.app.AlarmManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -95,6 +99,16 @@ internal fun ReminderModeSelector(
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 2.dp)
             )
+            TextButton(onClick = {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                )
+            }) {
+                Text(localizedText(language, "فعال‌سازی دسترسی زنگ دقیق", "Enable exact alarms", "تفعيل التنبيهات الدقيقة"))
+            }
         }
     }
 }
