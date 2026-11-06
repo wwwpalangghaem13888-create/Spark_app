@@ -12,8 +12,8 @@ android {
         applicationId = "com.spark.habittracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 5
+        versionName = "5.0.0"
     }
 
     buildFeatures { compose = true }
