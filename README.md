@@ -60,15 +60,15 @@ A Persian-first, offline-capable Android productivity application built with Kot
 
 ## Build
 
-Requirements: JDK 17, Gradle 8.5 and Android SDK 34.
+Requirements: JDK 17, Gradle 8.11.1 and Android SDK Platform 36 (including the matching build tools). The Android Gradle Plugin is 8.10.1.
 
 ```bash
-gradle testDebugUnitTest assembleDebug
+gradle testDebugUnitTest assembleDebug assembleRelease
 ```
 
 Debug APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
-GitHub Actions runs unit tests and builds a debug APK for pushes to the configured branches. Check the workflow run for the exact commit before installing an artifact.
+GitHub Actions runs JVM unit tests, assembles the debug APK and assembles an unsigned, minified release APK. It uploads both APKs as separate artifacts. The release artifact is unsigned and must not be distributed as a production build. Check the workflow run for the exact commit before installing an artifact.
 
 ## Remaining work and release limitations
 
