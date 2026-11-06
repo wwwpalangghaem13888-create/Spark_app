@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [main, master, spark-5.0]
+    branches: [main, master, spark-5.0, fix/stable-apk-signing]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
