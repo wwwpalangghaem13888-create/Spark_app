@@ -275,6 +275,7 @@ abstract class SparkDatabase : RoomDatabase() {
                 // Replace redundant single-column indexes with indexes aligned to
                 // the filters and sort orders used by the application.
                 db.execSQL("CREATE INDEX index_habits_createdAt ON habits(createdAt)")
+                db.execSQL("CREATE INDEX index_tasks_recurrenceParentId_dueDate ON tasks(recurrenceParentId, dueDate)")
                 db.execSQL("CREATE INDEX index_habit_logs_date ON habit_logs(date)")
                 db.execSQL("DROP INDEX IF EXISTS index_task_completion_history_taskId")
                 db.execSQL("CREATE INDEX index_task_completion_history_taskId_completed_activityDate ON task_completion_history(taskId, completed, activityDate)")
