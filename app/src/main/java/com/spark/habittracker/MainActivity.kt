@@ -119,7 +119,6 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
 private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val context = LocalContext.current
     val db = container.database
-    val dao = db.habitDao()
     val habitRepository = container.habitRepository
     val productivityRepository = container.productivityRepository
     var destination by remember { mutableStateOf(SparkDestination.Dashboard) }
@@ -143,7 +142,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val logs by remember(date) { habitRepository.observeLogs(date) }.collectAsState(initial = emptyList())
     val todayLogs by remember(currentDay) { habitRepository.observeLogs(currentDay) }.collectAsState(initial = emptyList())
     val allLogs by habitRepository.observeAllLogs().collectAsState(initial = emptyList())
-    val savedSettings by dao.observeSettings().collectAsState(initial = null)
+    val savedSettings by habitRepository.observeSettings().collectAsState(initial = null)
     val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
@@ -157,7 +156,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     LaunchedEffect(currentDay, tab) {
         if (tab == 0) date = currentDay
     }
-    LaunchedEffect(savedSettings) { if (savedSettings == null) dao.saveSettings(UserSettingsEntity()) }
+    LaunchedEffect(savedSettings) { if (savedSettings == null) habitRepository.saveSettings(UserSettingsEntity()) }
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
     val streaksByHabit = remember(habits, allLogs, currentDay) {
         habits.associate { habit ->
@@ -200,7 +199,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                     onToggle = { h, wasDone -> scope.launch { habitRepository.record(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch {
-                        db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) }
+                        habitRepository.delete(h.id)
                         db.productivityDao().deleteRemindersForOwner("HABIT", h.id)
                     } })
                 1 -> TaskListScreen(
@@ -254,7 +253,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                     }
                 )
                 3 -> Statistics(habits, allLogs, tasks + archivedTasks, taskHistory, focusSessions)
-                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
+                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated -> scope.launch { habitRepository.saveSettings(updated) } }
                 5 -> GoalsScreen(productivityRepository, tasks, habits)
                 6 -> FocusScreen(productivityRepository)
                 else -> BackupScreen(db)
