@@ -390,7 +390,12 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, taskHistory, focusSessions,
-                    onToggle = { h, wasDone -> scope.launch { habitRepository.record(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
+                    onToggle = { h, wasDone ->
+                        if (!wasDone && h.reminderMode == "ALARM") {
+                            context.stopService(Intent(context, AlarmRingingService::class.java))
+                        }
+                        scope.launch { habitRepository.record(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) }
+                    },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch {
                         habitRepository.delete(h.id)
