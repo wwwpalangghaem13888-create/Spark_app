@@ -38,6 +38,8 @@ class SparkCalculationTest {
         val habit = HabitEntity(
             id = 1,
             title = "Study",
+            note = "",
+            category = "Study",
             createdAt = today.minusDays(8).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
             scheduledDays = "MONDAY,WEDNESDAY,FRIDAY"
         )
@@ -55,6 +57,8 @@ class SparkCalculationTest {
         val habit = HabitEntity(
             id = 2,
             title = "Read",
+            note = "",
+            category = "Reading",
             createdAt = today.minusDays(7).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
             scheduledDays = "THURSDAY,FRIDAY"
         )
