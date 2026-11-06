@@ -54,6 +54,18 @@ class ProductivitySystemsTest {
     }
 
     @Test
+    fun stopwatchElapsedTimeRecoversWhileRunningAndPaused() {
+        val running = FocusSessionEntity(
+            mode = "STOPWATCH",
+            startedAt = 1_000_000L,
+            plannedDurationSeconds = 31_536_000L
+        )
+        assertEquals(120L, focusElapsedSeconds(running, 1_120_000L))
+        val paused = running.copy(pausedAt = 1_180_000L, accumulatedPausedSeconds = 30L)
+        assertEquals(150L, focusElapsedSeconds(paused, 1_300_000L))
+    }
+
+    @Test
     fun goalProgressIsBoundedAndRejectsInvalidTargets() {
         assertEquals(0.5f, goalProgressRatio(5, 10.0), 0.0001f)
         assertEquals(1f, goalProgressRatio(15, 10.0), 0.0001f)
