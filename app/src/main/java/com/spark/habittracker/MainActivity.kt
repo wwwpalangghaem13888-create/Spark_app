@@ -84,6 +84,10 @@ interface HabitDao {
     @Query("SELECT * FROM habits ORDER BY createdAt DESC") fun observeHabits(): Flow<List<HabitEntity>>
     @Query("SELECT * FROM habit_logs WHERE date = :date") fun observeLogs(date: String): Flow<List<HabitLogEntity>>
     @Query("SELECT * FROM habit_logs") fun observeAllLogs(): Flow<List<HabitLogEntity>>
+    @Query("SELECT * FROM habits") suspend fun getAllHabits(): List<HabitEntity>
+    @Query("SELECT * FROM habit_logs") suspend fun getAllLogs(): List<HabitLogEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreHabits(items: List<HabitEntity>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreLogs(items: List<HabitLogEntity>)
     @Query("SELECT * FROM user_settings WHERE id = 1") fun observeSettings(): Flow<UserSettingsEntity?>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveSettings(settings: UserSettingsEntity)
     @Insert suspend fun insertHabit(habit: HabitEntity): Long
