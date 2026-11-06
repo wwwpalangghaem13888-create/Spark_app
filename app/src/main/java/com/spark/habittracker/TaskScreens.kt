@@ -534,6 +534,43 @@ fun TaskEditorDialog(
     )
 }
 
+@Composable
+fun TaskGuideDialog(language: String, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = {
+            Text(localizedText(language, "راهنمای سریع بخش کارها", "Quick guide to Tasks", "دليل سريع لقسم المهام"))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text(
+                    localizedText(
+                        language,
+                        "اینجا کارهایی را ثبت کن که باید انجام بدهی؛ لازم نیست همه‌چیز را پیچیده کنی.",
+                        "Add things you need to do here. Keep it simple; extra details are optional.",
+                        "أضف هنا الأشياء التي تحتاج إلى إنجازها. اجعل الأمر بسيطاً؛ التفاصيل الإضافية اختيارية."
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(localizedText(language, "• یک‌باره: خرید ۲ کیلو گوجه برای امروز.", "• One time: buy 2 kg of tomatoes today.", "• مرة واحدة: شراء كيلوغرامين من الطماطم اليوم."))
+                Text(localizedText(language, "• موقت: تمرین در سه نوبت؛ تعداد و روزها را خودت تعیین کن.", "• Limited: repeat an activity three times; choose the count and days.", "• مؤقت: كرر نشاطاً ثلاث مرات؛ اختر العدد والأيام."))
+                Text(localizedText(language, "• دائمی: کاری که هر هفته یا هر روز ادامه دارد، تا وقتی متوقفش کنی.", "• Ongoing: something that repeats weekly or daily until you stop it.", "• مستمر: عمل يتكرر أسبوعياً أو يومياً حتى توقفه."))
+                Text(localizedText(language, "یادآوری و ساعت هم اختیاری هستند.", "Reminders and times are optional.", "التذكير والوقت اختياريان."))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "فهمیدم", "Got it", "فهمت"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "رد کردن راهنما", "Skip guide", "تخطي الدليل"))
+            }
+        }
+    )
+}
+
 private fun parseTaskTime(value: String): Long =
     LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
         .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
