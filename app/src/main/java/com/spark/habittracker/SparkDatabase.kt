@@ -11,14 +11,20 @@ data class HabitEntity(
     val title: String, val note: String, val category: String,
     val createdAt: Long = System.currentTimeMillis(),
     val scheduledDays: String = "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY",
-    val reminderTime: String = "", val isEnabled: Boolean = true
+    val reminderTime: String = "", val isEnabled: Boolean = true, @ColumnInfo(defaultValue = "'NOTIFICATION'") val reminderMode: String = "NOTIFICATION"
 )
 
 @Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "date"], unique = true), Index("date")], foreignKeys = [ForeignKey(entity = HabitEntity::class, parentColumns = ["id"], childColumns = ["habitId"], onDelete = ForeignKey.CASCADE)])
 data class HabitLogEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val habitId: Long, val date: String, val isCompleted: Boolean, val completionTimestamp: Long = System.currentTimeMillis())
 
 @Entity(tableName = "user_settings")
-data class UserSettingsEntity(@PrimaryKey val id: Int = 1, val theme: String = "neon", val accent: String = "violet", val reducedMotion: Boolean = false)
+data class UserSettingsEntity(
+    @PrimaryKey val id: Int = 1,
+    val theme: String = "neon",
+    val accent: String = "violet",
+    val reducedMotion: Boolean = false,
+    @ColumnInfo(defaultValue = "'fa'") val language: String = "fa"
+)
 
 @Dao
 interface HabitDao {
@@ -45,14 +51,14 @@ interface HabitDao {
     suspend fun deleteHabit(id: Long): Int
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 7, exportSchema = false)
+@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 9, exportSchema = false)
 abstract class SparkDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun taskDao(): TaskDao
     abstract fun productivityDao(): ProductivityDao
 
     companion object {
-        const val VERSION = 7
+        const val VERSION = 9
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -344,6 +350,24 @@ abstract class SparkDatabase : RoomDatabase() {
                         DELETE FROM reminders WHERE ownerType = 'FOCUS' AND ownerId = OLD.id;
                     END
                 """)
+            }
+        }
+        /**
+         * Version 8 adds finite recurrence state and the app language preference.
+         * Both fields are appended with backward-compatible defaults; existing tasks
+         * remain unlimited when they already use a recurrence rule.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN repeatRemainingCount INTEGER")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN language TEXT NOT NULL DEFAULT 'fa'")
+            }
+        }
+
+        /** Adds a per-habit delivery mode without changing existing reminder schedules. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN reminderMode TEXT NOT NULL DEFAULT 'NOTIFICATION'")
             }
         }
     }

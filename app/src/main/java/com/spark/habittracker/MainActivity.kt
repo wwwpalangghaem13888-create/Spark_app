@@ -1,11 +1,23 @@
 package com.spark.habittracker
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Color as AndroidColor
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Bundle
+import android.view.ContextThemeWrapper
 import android.os.Build
 import android.content.pm.PackageManager
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.NumberPicker
+import android.widget.EditText
+import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModelProvider
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -26,6 +38,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
@@ -33,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.painterResource
 import kotlin.math.roundToInt
@@ -71,7 +86,40 @@ private val Cyan: Color @Composable get() = LocalSparkPalette.current.secondary
 private val Muted: Color @Composable get() = LocalSparkPalette.current.muted
 private val White: Color @Composable get() = LocalSparkPalette.current.foreground
 
+private fun sparkTabTitles(language: String) = listOf(
+    localizedText(language, "عادت‌های روزانه", "Habits", "العادات"),
+    localizedText(language, "کارها", "Tasks", "المهام"),
+    localizedText(language, "مرور روزها", "Calendar", "التقويم"),
+    localizedText(language, "گزارش عملکرد", "Statistics", "الإحصاءات"),
+    localizedText(language, "سطح و دستاوردها", "Progress", "التقدم"),
+    localizedText(language, "اهداف", "Goals", "الأهداف"),
+    localizedText(language, "تمرکز", "Focus", "التركيز"),
+    localizedText(language, "پشتیبان‌گیری", "Backup", "النسخ الاحتياطي")
+)
+
+private fun sparkNavigationLabels(language: String) = listOf(
+    localizedText(language, "خانه", "Home", "الرئيسية"),
+    localizedText(language, "کارها", "Tasks", "المهام"),
+    localizedText(language, "تقویم", "Calendar", "التقويم"),
+    localizedText(language, "آمار", "Stats", "الإحصاءات"),
+    localizedText(language, "پروفایل", "Profile", "الملف الشخصي"),
+    localizedText(language, "اهداف", "Goals", "الأهداف"),
+    localizedText(language, "تمرکز", "Focus", "التركيز"),
+    localizedText(language, "پشتیبان", "Backup", "النسخ الاحتياطي")
+)
+
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        val selectedLanguage = newBase.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
+            .getString("language", "fa") ?: "fa"
+        val locale = Locale.forLanguageTag(selectedLanguage)
+        val configuration = Configuration(newBase.resources.configuration).apply {
+            setLocale(locale)
+            setLayoutDirection(locale)
+        }
+        super.attachBaseContext(newBase.createConfigurationContext(configuration))
+    }
+
     private val container by lazy { (application as SparkApplication).container }
     private val db by lazy { container.database }
     private val sparkViewModel by lazy {
@@ -85,7 +133,66 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by container.habitRepository.observeSettings().collectAsState(initial = null)
-            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(container, sparkViewModel) }
+            SparkTheme(settings ?: UserSettingsEntity()) {
+                var splashVisible by remember { mutableStateOf(true) }
+                val splashProgress by animateFloatAsState(
+                    targetValue = if (splashVisible) 1f else 0f,
+                    animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing),
+                    label = "splashFade"
+                )
+                val logoScale by animateFloatAsState(
+                    targetValue = if (splashVisible) 1f else 0.88f,
+                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+                    label = "logoScale"
+                )
+                LaunchedEffect(Unit) {
+                    delay(1900)
+                    splashVisible = false
+                }
+                Box(Modifier.fillMaxSize()) {
+                    SparkApp(container, sparkViewModel)
+                    if (splashVisible || splashProgress > 0.01f) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                alpha = splashProgress
+                            }.background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color(0xFF21113D), Color(0xFF090716), Color.Black),
+                                    radius = 1050f
+                                )
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Image(
+                                    painter = painterResource(R.drawable.spark_logo),
+                                    contentDescription = "Spark logo",
+                                    modifier = Modifier.size(128.dp * logoScale)
+                                )
+                                Spacer(Modifier.height(18.dp))
+                                Text(
+                                    "SPARK",
+                                    color = Color(0xFFF1E7FF),
+                                    fontSize = 27.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 6.sp
+                                )
+                                Spacer(Modifier.height(9.dp))
+                                Text(
+                                    "BIGGER DREAMS  ✦  BRIGHTER YOU",
+                                    color = Color(0xFFC49A5A).copy(alpha = splashProgress),
+                                    fontSize = 9.sp,
+                                    letterSpacing = 1.6.sp
+                                )
+                                Spacer(Modifier.height(34.dp))
+                                Box(Modifier.width(42.dp).height(2.dp).clip(CircleShape).background(
+                                    Brush.horizontalGradient(listOf(Color.Transparent, Color(0xFFD6B8FF), Color.Transparent))
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -96,7 +203,11 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
         "cyan" -> Color(0xFF42DCE8)
         "lime" -> Color(0xFFC5F36A)
         "pink" -> Color(0xFFFF75C8)
-        else -> Color(0xFF9A63FF)
+        else -> runCatching {
+            if (settings.accent.matches(Regex("^#[0-9A-Fa-f]{6}$"))) {
+                Color(AndroidColor.parseColor(settings.accent))
+            } else Color(0xFF9A63FF)
+        }.getOrDefault(Color(0xFF9A63FF))
     }
     val background = when (settings.theme) {
         "dark" -> Color(0xFF020304)
@@ -134,7 +245,19 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
         if (light) Color(0xFF626575) else Color(0xFFA9A0C2),
         if (light) Color(0xFF171923) else Color(0xFFF8F5FF)
     )
-    CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides LayoutDirection.Rtl) {
+    val localizedConfiguration = Configuration(LocalConfiguration.current).apply {
+        setLocale(Locale.forLanguageTag(when (settings.language) {
+            "en" -> "en-US"
+            "ar" -> "ar"
+            else -> "fa-IR"
+        }))
+    }
+    CompositionLocalProvider(
+        LocalSparkPalette provides palette,
+        LocalSparkLanguage provides settings.language,
+        LocalConfiguration provides localizedConfiguration,
+        LocalLayoutDirection provides if (settings.language == "en") LayoutDirection.Ltr else LayoutDirection.Rtl
+    ) {
         val colors = if (light) lightColorScheme(
             primary = accent, secondary = palette.secondary, background = background,
             surface = surface, onPrimary = Color.White, onBackground = palette.foreground, onSurface = palette.foreground
@@ -149,10 +272,19 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
 @Composable
 private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val context = LocalContext.current
+    val taskGuidePrefs = remember(context) {
+        context.getSharedPreferences("spark_task_guide", Context.MODE_PRIVATE)
+    }
+    val appGuidePrefs = remember(context) {
+        context.getSharedPreferences("spark_app_guide", Context.MODE_PRIVATE)
+    }
+    var showAppGuide by remember { mutableStateOf(false) }
+    var showTaskGuide by remember { mutableStateOf(false) }
     val db = container.database
     val habitRepository = container.habitRepository
     val productivityRepository = container.productivityRepository
     var destination by remember { mutableStateOf(SparkDestination.Dashboard) }
+    var moreNavigationExpanded by remember { mutableStateOf(false) }
     val tab = destination.tabIndex
     var date by remember { mutableStateOf(LocalDate.now()) }
     var currentDay by remember { mutableStateOf(LocalDate.now()) }
@@ -176,6 +308,14 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val savedSettings by habitRepository.observeSettings().collectAsState(initial = null)
     val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        if (!appGuidePrefs.getBoolean("seen_v1", false)) showAppGuide = true
+    }
+    LaunchedEffect(tab) {
+        if (tab == 1 && !taskGuidePrefs.getBoolean("seen_v1", false)) {
+            showTaskGuide = true
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             val zone = ZoneId.systemDefault()
@@ -207,15 +347,47 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
                 Text("SPARK", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text(listOf("عادت‌های روزانه", "کارها", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها", "اهداف", "تمرکز", "پشتیبان‌گیری")[tab], color = Muted, fontSize = 12.sp)
+                Text(sparkTabTitles(settings.language)[tab], color = Muted, fontSize = 12.sp)
             }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
-        bottomBar = { NavigationBar(containerColor = Panel) {
-            listOf("خانه" to Icons.Default.Home, "کارها" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents, "اهداف" to Icons.Default.Flag, "تمرکز" to Icons.Default.Timer, "پشتیبان" to Icons.Default.Folder).forEachIndexed { i, item ->
-                NavigationBarItem(selected = tab == i, onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
+        bottomBar = {
+            Box {
+                NavigationBar(containerColor = Panel) {
+                    val navigationIcons = listOf(Icons.Default.Home, Icons.Default.Checklist, Icons.Default.CalendarMonth, Icons.Default.Insights)
+                    val labels = sparkNavigationLabels(settings.language)
+                    (0..3).forEach { i ->
+                        NavigationBarItem(
+                            selected = tab == i,
+                            onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() },
+                            icon = { Icon(navigationIcons[i], labels[i]) },
+                            label = { Text(labels[i], maxLines = 1) },
+                            colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet,
+                                indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted)
+                        )
+                    }
+                    NavigationBarItem(
+                        selected = tab >= 4,
+                        onClick = { moreNavigationExpanded = true },
+                        icon = { Icon(Icons.Default.MoreVert, localizedText(settings.language, "بیشتر", "More", "المزيد")) },
+                        label = { Text(localizedText(settings.language, "بیشتر", "More", "المزيد")) },
+                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet,
+                            indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted)
+                    )
+                }
+                DropdownMenu(expanded = moreNavigationExpanded, onDismissRequest = { moreNavigationExpanded = false },
+                    modifier = Modifier.align(Alignment.TopEnd)) {
+                    val labels = sparkNavigationLabels(settings.language)
+                    (4..7).forEach { i ->
+                        DropdownMenuItem(text = { Text(labels[i]) }, onClick = {
+                            destination = SparkDestination.fromTab(i)
+                            moreNavigationExpanded = false
+                        }, leadingIcon = {
+                            Icon(listOf(Icons.Default.EmojiEvents, Icons.Default.Flag, Icons.Default.Timer, Icons.Default.Folder)[i - 4], null)
+                        })
+                    }
+                }
             }
-        } },
+        },
         floatingActionButton = { if (tab == 0 || tab == 1 || tab == 2) FloatingActionButton(onClick = {
             when (tab) {
                 1 -> { editingTask = null; taskEditorOpen = true }
@@ -227,7 +399,12 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, taskHistory, focusSessions,
-                    onToggle = { h, wasDone -> scope.launch { habitRepository.record(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
+                    onToggle = { h, wasDone ->
+                        if (!wasDone && h.reminderMode == "ALARM") {
+                            context.stopService(Intent(context, AlarmRingingService::class.java))
+                        }
+                        scope.launch { habitRepository.record(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) }
+                    },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch {
                         habitRepository.delete(h.id)
@@ -284,14 +461,35 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                     }
                 )
                 3 -> Statistics(habits, allLogs, tasks + archivedTasks, taskHistory, focusSessions)
-                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated -> scope.launch { habitRepository.saveSettings(updated) } }
+                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated ->
+                    scope.launch {
+                        habitRepository.saveSettings(updated)
+                        if (updated.language != settings.language) {
+                            context.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
+                                .edit().putString("language", updated.language).apply()
+                            (context as? Activity)?.recreate()
+                        }
+                    }
+                }
                 5 -> GoalsScreen(productivityRepository, tasks, habits)
                 6 -> FocusScreen(productivityRepository)
                 else -> BackupScreen(db)
             }
         }
     }
-    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category, scheduledDays, reminderTime ->
+    if (showAppGuide) {
+        AppGuideDialog(language = settings.language) {
+            appGuidePrefs.edit().putBoolean("seen_v1", true).apply()
+            showAppGuide = false
+        }
+    }
+    if (showTaskGuide) {
+        TaskGuideDialog(language = settings.language) {
+            taskGuidePrefs.edit().putBoolean("seen_v1", true).apply()
+            showTaskGuide = false
+        }
+    }
+    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category, scheduledDays, reminderTime, reminderMode ->
         scope.launch {
             val habit = HabitEntity(
                 id = editing?.id ?: 0, title = title.trim(), note = note.trim(),
@@ -299,14 +497,19 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                 createdAt = editing?.createdAt ?: System.currentTimeMillis(),
                 scheduledDays = scheduledDays,
                 reminderTime = reminderTime,
-                isEnabled = editing?.isEnabled ?: true
+                isEnabled = editing?.isEnabled ?: true,
+                reminderMode = reminderMode
             )
             val habitId = habitRepository.save(habit)
             db.productivityDao().deleteRemindersForOwner("HABIT", habitId)
             nextHabitReminder(habit, System.currentTimeMillis())?.let { triggerAt ->
                 val reminder = ReminderEntity(ownerType = "HABIT", ownerId = habitId, triggerAt = triggerAt)
                 val reminderId = db.productivityDao().insertReminder(reminder)
-                ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                ReminderScheduler.schedule(
+                    context,
+                    reminder.copy(id = reminderId),
+                    alarmStyle = habit.reminderMode == "ALARM"
+                )
             }
         }
         editorOpen = false
@@ -357,6 +560,7 @@ private suspend fun recordTaskCompletionAndSyncReminder(
 
 @Composable
 private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, streaks: Map<Long, Int>, reducedMotion: Boolean, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, focusSessions: List<FocusSessionEntity>, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+    val language = LocalSparkLanguage.current
     val today = LocalDate.now()
     val tasksDueToday = tasks.filter { it.dueDate == today.toString() }
     val completedTasksToday = countUniqueTaskRewards(taskHistory, today) -
@@ -388,32 +592,32 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("$percentage٪", color = White, fontSize = 25.sp, fontWeight = FontWeight.Black)
-                        Text("امروز", color = Muted, fontSize = 10.sp)
+                        Text(localizedText(language, "امروز", "Today", "اليوم"), color = Muted, fontSize = 10.sp)
                     }
                 }
                 Spacer(Modifier.width(18.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("پیشرفت امروز", color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(if (habits.isEmpty()) "اولین عادتت را اضافه کن." else "$completedCount از ${habits.size} عادت انجام شده", color = Muted, fontSize = 13.sp)
+                    Text(localizedText(language, "پیشرفت امروز", "Today's progress", "إنجاز اليوم"), color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(if (habits.isEmpty()) localizedText(language, "اولین عادتت را اضافه کن.", "Add your first habit.", "أضف عادتك الأولى.") else localizedText(language, "$completedCount از ${habits.size} عادت انجام شده", "$completedCount of ${habits.size} habits completed", "أُنجزت $completedCount من ${habits.size} عادات"), color = Muted, fontSize = 13.sp)
                     Spacer(Modifier.height(9.dp))
-                    Text(if (habits.isNotEmpty() && completedCount == habits.size) "همه کارها انجام شد!" else "قدم‌های کوچک، تغییرهای بزرگ.", color = VioletLight, fontSize = 11.sp)
+                    Text(if (habits.isNotEmpty() && completedCount == habits.size) localizedText(language, "همه عادت‌های امروز انجام شد!", "All today's habits are done!", "اكتملت عادات اليوم!") else localizedText(language, "قدم‌های کوچک، تغییرهای بزرگ.", "Small steps make big changes.", "خطوات صغيرة تصنع فرقاً كبيراً."), color = VioletLight, fontSize = 11.sp)
                 }
             }
         }
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Metric("کل عادت‌ها", habits.size.toString(), Modifier.weight(1f))
-            Metric("انجام‌شده", completedCount.toString(), Modifier.weight(1f))
-            Metric("باقی‌مانده", (habits.size - completedCount).coerceAtLeast(0).toString(), Modifier.weight(1f))
+            Metric(localizedText(language, "کل عادت‌ها", "Total habits", "إجمالي العادات"), habits.size.toString(), Modifier.weight(1f))
+            Metric(localizedText(language, "انجام‌شده", "Completed", "مكتملة"), completedCount.toString(), Modifier.weight(1f))
+            Metric(localizedText(language, "باقی‌مانده", "Remaining", "متبقية"), (habits.size - completedCount).coerceAtLeast(0).toString(), Modifier.weight(1f))
         } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Metric("کارهای امروز", tasksDueToday.size.toString(), Modifier.weight(1f))
-                Metric("تکمیل امروز", completedTasksToday.toString(), Modifier.weight(1f))
-                Metric("تمرکز", focusMinutesToday.toString() + " دقیقه", Modifier.weight(1f))
+                Metric(localizedText(language, "کارهای امروز", "Today's tasks", "مهام اليوم"), tasksDueToday.size.toString(), Modifier.weight(1f))
+                Metric(localizedText(language, "تکمیل امروز", "Done today", "أُنجزت اليوم"), completedTasksToday.toString(), Modifier.weight(1f))
+                Metric(localizedText(language, "تمرکز", "Focus", "التركيز"), focusMinutesToday.toString() + localizedText(language, " دقیقه", " min", " د"), Modifier.weight(1f))
             }
         }
-        item { Text("کارهای پیش رو", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
-        if (tasksDueToday.isEmpty()) item { Text("برای امروز کاری زمان‌بندی نشده است.", color = Muted, fontSize = 12.sp) }
+        item { Text(localizedText(language, "کارهای پیش رو", "Upcoming tasks", "المهام القادمة"), color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        if (tasksDueToday.isEmpty()) item { Text(localizedText(language, "برای امروز کاری زمان‌بندی نشده است.", "Nothing is scheduled for today.", "لا توجد مهام مجدولة لليوم."), color = Muted, fontSize = 12.sp) }
         else items(tasksDueToday.take(3), key = { "task-" + it.id }) { task ->
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (task.completed) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = if (task.completed) Cyan else Muted)
@@ -421,7 +625,7 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
                 Text(if (task.completed) "انجام شد" else taskPriorityLabel(task.priority), color = Muted, fontSize = 10.sp)
             }
         }
-        item { Text("فهرست امروز", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        item { Text(localizedText(language, "فهرست امروز", "Today's habits", "عادات اليوم"), color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         if (habits.isEmpty()) item { EmptyState() } else items(habits, key = { it.id }) { h -> HabitCard(h, h.id in done, streaks[h.id] ?: 0, { onToggle(h, h.id in done) }, { onEdit(h) }, { onDelete(h) }) }
     }
 }
@@ -435,15 +639,17 @@ private fun Metric(label: String, value: String, modifier: Modifier) {
 
 @Composable
 private fun EmptyState() {
+    val language = LocalSparkLanguage.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Default.CheckCircle, null, tint = Violet, modifier = Modifier.size(34.dp))
-        Text("هنوز عادتی ثبت نشده", color = White, fontWeight = FontWeight.Bold)
-        Text("با دکمه + اولین عادتت را بساز.", color = Muted, fontSize = 12.sp)
+        Text(localizedText(language, "هنوز عادتی ثبت نکردی", "No habits yet", "لا توجد عادات بعد"), color = White, fontWeight = FontWeight.Bold)
+        Text(localizedText(language, "با دکمه + اولین عادتت را بساز.", "Tap + to add your first habit.", "اضغط + لإضافة عادتك الأولى."), color = Muted, fontSize = 12.sp)
     }
 }
 
 @Composable
 private fun HabitCard(h: HabitEntity, completed: Boolean, streak: Int, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
+    val language = LocalSparkLanguage.current
     val palette = LocalSparkPalette.current
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -454,13 +660,13 @@ private fun HabitCard(h: HabitEntity, completed: Boolean, streak: Int, toggle: (
         Column(Modifier.weight(1f).clickable(onClick = toggle)) {
             Text(h.title, color = if (completed) Muted else White, fontWeight = FontWeight.SemiBold, textDecoration = if (completed) TextDecoration.LineThrough else TextDecoration.None)
             Text(listOf(h.category, h.note, h.reminderTime).filter { it.isNotBlank() }.joinToString(" • "), color = Muted, fontSize = 11.sp, maxLines = 2)
-            if (streak > 0) Text("🔥 $streak روز زنجیره", color = Cyan, fontSize = 10.sp)
+            if (streak > 0) Text("🔥 $streak " + localizedText(language, "روز زنجیره", "day streak", "أيام متتالية"), color = Cyan, fontSize = 10.sp)
         }
         Box {
             TextButton(onClick = { menu = true }) { Text("•••", color = Muted) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("ویرایش") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; edit() })
-                DropdownMenuItem(text = { Text("حذف") }, leadingIcon = { Icon(Icons.Default.Delete, null) }, onClick = { menu = false; delete() })
+                DropdownMenuItem(text = { Text(localizedText(language, "ویرایش", "Edit", "تعديل")) }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; edit() })
+                DropdownMenuItem(text = { Text(localizedText(language, "حذف", "Delete", "حذف")) }, leadingIcon = { Icon(Icons.Default.Delete, null) }, onClick = { menu = false; delete() })
             }
         }
     }
@@ -468,12 +674,13 @@ private fun HabitCard(h: HabitEntity, completed: Boolean, streak: Int, toggle: (
 
 @Composable
 private fun History(date: LocalDate, changeDate: (LocalDate) -> Unit, habits: List<HabitEntity>, done: Set<Long>) {
+    val language = LocalSparkLanguage.current
     val formatter = remember { DateTimeFormatter.ofPattern("EEEE، d MMMM", Locale("fa")) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            IconButton(onClick = { changeDate(date.minusDays(1)) }) { Icon(Icons.Default.ChevronRight, "روز قبل", tint = White) }
+            IconButton(onClick = { changeDate(date.minusDays(1)) }) { Icon(Icons.Default.ChevronRight, localizedText(language, "روز قبل", "Previous day", "اليوم السابق"), tint = White) }
             Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(date.format(formatter), color = White, fontWeight = FontWeight.Bold); Text(date.toString(), color = Muted, fontSize = 11.sp) }
-            IconButton(onClick = { if (date.isBefore(LocalDate.now())) changeDate(date.plusDays(1)) }) { Icon(Icons.Default.ChevronLeft, "روز بعد", tint = if (date.isBefore(LocalDate.now())) White else Muted) }
+            IconButton(onClick = { if (date.isBefore(LocalDate.now())) changeDate(date.plusDays(1)) }) { Icon(Icons.Default.ChevronLeft, localizedText(language, "روز بعد", "Next day", "اليوم التالي"), tint = if (date.isBefore(LocalDate.now())) White else Muted) }
         }
         Text("${done.size} از ${habits.size} عادت انجام شده", color = Violet, fontWeight = FontWeight.Bold)
         if (habits.isEmpty()) EmptyState() else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -496,6 +703,7 @@ private fun Statistics(
     taskHistory: List<TaskCompletionEntity>,
     focusSessions: List<FocusSessionEntity>
 ) {
+    val language = LocalSparkLanguage.current
     val today = LocalDate.now()
     var periodDays by remember { mutableIntStateOf(7) }
     val report = remember(habits, logs, tasks, taskHistory, focusSessions, periodDays, today) {
@@ -503,8 +711,8 @@ private fun Statistics(
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Text("مرکز تحلیل Spark", color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("گزارش‌ها از سوابق ذخیره‌شده ساخته می‌شوند.", color = Muted, fontSize = 11.sp)
+            Text(localizedText(language, "مرکز تحلیل Spark", "Spark analytics", "تحليلات Spark"), color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(localizedText(language, "گزارش‌ها از سوابق ذخیره‌شده ساخته می‌شوند.", "Reports are based on saved activity.", "تعتمد التقارير على النشاط المحفوظ."), color = Muted, fontSize = 11.sp)
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -527,6 +735,61 @@ private fun Statistics(
                 MetricCard("کارهای تکمیل‌شده", report.completedTasks.toString(), Modifier.weight(1f))
                 MetricCard("زمان تمرکز", (report.focusSeconds / 60).toString() + " دقیقه", Modifier.weight(1f))
                 MetricCard("کارهای باز", tasks.count { !it.completed && !it.archived }.toString(), Modifier.weight(1f))
+            }
+        }
+        item {
+            val dailyTaskRates = report.days.mapNotNull { day ->
+                val due = tasks.count { it.dueDate == day.date.toString() }
+                if (due == 0) null else (day.completedTasks.toFloat() / due).coerceIn(0f, 1f)
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("درصد انجام کارها", color = White, fontWeight = FontWeight.Bold)
+                Text("بر اساس کارهایی که تاریخ انجامشان در بازهٔ انتخابی است", color = Muted, fontSize = 10.sp)
+                if (dailyTaskRates.isEmpty()) {
+                    Text(localizedText(language, "در این بازه کار تاریخ‌داری ثبت نشده است.", "No dated tasks were scheduled in this period.", "لا توجد مهام مؤرخة في هذه الفترة."), color = Muted, fontSize = 11.sp)
+                } else {
+                    SparkLineChart(dailyTaskRates, Modifier.fillMaxWidth().height(150.dp))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(report.startDate.toString(), color = Muted, fontSize = 9.sp)
+                    Text(report.endDate.toString(), color = Muted, fontSize = 9.sp)
+                }
+            }
+        }
+        item {
+            val completedNow = tasks.count { task ->
+                if (!task.completed) false else {
+                    val activityDate = task.completedAt?.let {
+                        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                    } ?: task.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    activityDate != null && activityDate >= report.startDate && activityDate <= report.endDate
+                }
+            }
+            val openNow = tasks.count { task ->
+                if (task.completed || task.archived) false else {
+                    val due = task.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    due != null && due >= report.startDate && due <= report.endDate
+                }
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("کارهای انجام‌شده و باقی‌مانده", color = White, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    SparkPieChart(completedNow, openNow, Modifier.size(116.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(9.dp).clip(CircleShape).background(Violet))
+                            Spacer(Modifier.width(7.dp))
+                            Text("انجام‌شده: $completedNow", color = White, fontSize = 12.sp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(9.dp).clip(CircleShape).background(Cyan))
+                            Spacer(Modifier.width(7.dp))
+                            Text("باقی‌مانده: $openNow", color = White, fontSize = 12.sp)
+                        }
+                    }
+                }
             }
         }
         item {
@@ -569,6 +832,121 @@ private fun Statistics(
 }
 
 @Composable
+private fun SparkLineChart(values: List<Float>, modifier: Modifier = Modifier) {
+    val lineColor = Violet
+    val pointColor = VioletLight
+    Canvas(modifier) {
+        if (values.isEmpty()) return@Canvas
+        val left = 8f
+        val right = size.width - 8f
+        val top = 12f
+        val bottom = size.height - 14f
+        repeat(4) { index ->
+            val y = top + (bottom - top) * index / 3f
+            drawLine(Color.White.copy(alpha = 0.10f), androidx.compose.ui.geometry.Offset(left, y),
+                androidx.compose.ui.geometry.Offset(right, y), strokeWidth = 1.dp.toPx())
+        }
+        if (values.size == 1) {
+            drawCircle(lineColor, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width / 2, top + (bottom-top) * (1f-values[0])))
+            return@Canvas
+        }
+        val points = values.mapIndexed { index, value ->
+            androidx.compose.ui.geometry.Offset(
+                left + (right-left) * index / (values.size-1).toFloat(),
+                bottom - (bottom-top) * value.coerceIn(0f,1f)
+            )
+        }
+        points.zipWithNext().forEach { (a,b) ->
+            drawLine(lineColor, a, b, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+        }
+        points.forEach { drawCircle(pointColor, radius = 3.dp.toPx(), center = it) }
+    }
+}
+
+@Composable
+private fun SparkPieChart(completed: Int, remaining: Int, modifier: Modifier = Modifier) {
+    val completedColor = Violet
+    val remainingColor = Cyan
+    val holeColor = Panel
+    Canvas(modifier) {
+        val total = completed + remaining
+        if (total <= 0) {
+            drawArc(Color.White.copy(alpha = 0.16f), 0f, 360f, true)
+            return@Canvas
+        }
+        val doneSweep = 360f * completed / total.toFloat()
+        drawArc(completedColor, -90f, doneSweep, true)
+        if (remaining > 0) drawArc(remainingColor, -90f + doneSweep, 360f - doneSweep, true)
+        drawCircle(holeColor, radius = size.minDimension * 0.27f)
+    }
+}
+
+@Composable
+private fun CustomAccentDialog(initialAccent: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    val initialHsv = remember(initialAccent) {
+        FloatArray(3).also { hsv ->
+            val initialColor = runCatching { AndroidColor.parseColor(initialAccent) }
+                .getOrDefault(AndroidColor.rgb(139, 69, 255))
+            AndroidColor.colorToHSV(initialColor, hsv)
+        }
+    }
+    var hue by remember(initialAccent) { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember(initialAccent) { mutableFloatStateOf(initialHsv[1]) }
+    var brightness by remember(initialAccent) { mutableFloatStateOf(initialHsv[2]) }
+    var hexText by remember(initialAccent) {
+        mutableStateOf(
+            initialAccent.takeIf { it.matches(Regex("^#[0-9A-Fa-f]{6}$")) }
+                ?: String.format("#%06X", 0xFFFFFF and Color.hsv(initialHsv[0], initialHsv[1], initialHsv[2]).toArgb())
+        )
+    }
+    val preview = Color.hsv(hue, saturation, brightness)
+    val generatedHex = String.format("#%06X", 0xFFFFFF and preview.toArgb())
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localizedText(LocalSparkLanguage.current, "استودیو ساخت رنگ", "Color studio", "استوديو الألوان"), color = White) },
+        containerColor = Panel,
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(preview)
+                )
+                Text(localizedText(LocalSparkLanguage.current, "فام رنگ", "Hue", "درجة اللون"), color = White)
+                Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
+                Text(localizedText(LocalSparkLanguage.current, "اشباع", "Saturation", "التشبع"), color = White)
+                Slider(value = saturation, onValueChange = { saturation = it }, valueRange = 0f..1f)
+                Text(localizedText(LocalSparkLanguage.current, "روشنایی", "Brightness", "السطوع"), color = White)
+                Slider(value = brightness, onValueChange = { brightness = it }, valueRange = 0f..1f)
+                OutlinedTextField(
+                    value = hexText,
+                    onValueChange = { value ->
+                        hexText = value.uppercase(Locale.ROOT)
+                        if (hexText.matches(Regex("^#[0-9A-F]{6}$"))) {
+                            runCatching { AndroidColor.parseColor(hexText) }.getOrNull()?.let { parsed ->
+                                val hsv = FloatArray(3)
+                                AndroidColor.colorToHSV(parsed, hsv)
+                                hue = hsv[0]
+                                saturation = hsv[1]
+                                brightness = hsv[2]
+                            }
+                        }
+                    },
+                    label = { Text(localizedText(LocalSparkLanguage.current, "کد رنگ HEX", "HEX color", "رمز اللون HEX")) },
+                    supportingText = { Text("نمونه: #7C4DFF") },
+                    singleLine = true
+                )
+                Text("پیش‌نمایش: $generatedHex", color = Muted, fontSize = 11.sp)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(generatedHex) }) { Text(localizedText(LocalSparkLanguage.current, "ذخیره رنگ", "Save color", "حفظ اللون"), color = Violet) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("انصراف", color = Muted) }
+        }
+    )
+}
+
+@Composable
 private fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier.clip(RoundedCornerShape(16.dp)).background(Panel).padding(14.dp)) {
         Text(title, color = Muted, fontSize = 11.sp)
@@ -579,6 +957,21 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
 
 @Composable
 private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
+    val language = LocalSparkLanguage.current
+    val context = LocalContext.current
+    var showColorStudio by remember { mutableStateOf(false) }
+    var selectedSoundMode by remember { mutableStateOf(ReminderScheduler.soundMode(context)) }
+    var selectedSoundUri by remember { mutableStateOf(ReminderScheduler.customSoundUri(context)) }
+    val soundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            ReminderScheduler.setSound(context, "CUSTOM", uri)
+            selectedSoundMode = "CUSTOM"
+            selectedSoundUri = uri
+        }
+    }
     val today = LocalDate.now()
     val completedLogs = completedHabitLogsThroughDate(allLogs, today)
     val taskRewards = countUniqueTaskRewards(taskHistory, today)
@@ -681,19 +1074,23 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
             }
         }
         item {
+            Text("Built by Ghaem", color = Muted, fontSize = 11.sp, letterSpacing = 1.sp,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("ظاهر برنامه", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text("تم", color = Muted, fontSize = 12.sp)
+                Text(localizedText(language, "ظاهر برنامه", "Appearance", "المظهر"), color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(localizedText(language, "تم", "Theme", "السمة"), color = Muted, fontSize = 12.sp)
                 val themeOptions = listOf(
-                    "neon" to "نئون بنفش",
-                    "dark" to "مشکی عمیق",
-                    "midnight" to "نیمه‌شب",
-                    "neon-blue" to "نئون آبی",
-                    "neon-green" to "نئون سبز",
-                    "neon-pink" to "نئون صورتی",
-                    "neon-red" to "نئون قرمز",
-                    "minimal" to "مینیمال",
-                    "light" to "روشن"
+                    "neon" to localizedText(language, "نئون بنفش", "Purple neon", "نيون بنفسجي"),
+                    "dark" to localizedText(language, "مشکی عمیق", "Deep black", "أسود داكن"),
+                    "midnight" to localizedText(language, "نیمه‌شب", "Midnight", "منتصف الليل"),
+                    "neon-blue" to localizedText(language, "نئون آبی", "Blue neon", "نيون أزرق"),
+                    "neon-green" to localizedText(language, "نئون سبز", "Green neon", "نيون أخضر"),
+                    "neon-pink" to localizedText(language, "نئون صورتی", "Pink neon", "نيون وردي"),
+                    "neon-red" to localizedText(language, "نئون قرمز", "Red neon", "نيون أحمر"),
+                    "minimal" to localizedText(language, "مینیمال", "Minimal", "بسيط"),
+                    "light" to localizedText(language, "روشن", "Light", "فاتح")
                 )
                 themeOptions.chunked(3).forEach { group ->
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -714,21 +1111,92 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                         }
                     }
                 }
-                Text("رنگ تأکیدی", color = Muted, fontSize = 12.sp)
+                Text(localizedText(language, "رنگ تأکیدی", "Accent color", "لون التمييز"), color = Muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    listOf("violet" to "بنفش", "cyan" to "فیروزه‌ای", "lime" to "سبز", "pink" to "صورتی").forEach { (key, label) ->
+                    listOf("violet" to localizedText(language, "بنفش", "Violet", "بنفسجي"), "cyan" to localizedText(language, "فیروزه‌ای", "Cyan", "سماوي"), "lime" to localizedText(language, "سبز", "Lime", "ليموني"), "pink" to localizedText(language, "صورتی", "Pink", "وردي")).forEach { (key, label) ->
                         FilterChip(selected = settings.accent == key, onClick = { onSettingsChange(settings.copy(accent = key)) }, label = { Text(label) })
                     }
                 }
+                OutlinedButton(onClick = { showColorStudio = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Palette, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(localizedText(language, "استودیو رنگ دلخواه", "Custom color studio", "استوديو الألوان"))
+                }
+
+                Text(localizedText(language, "زبان برنامه", "App language", "لغة التطبيق"), color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    listOf("fa" to "فارسی", "en" to "English", "ar" to "العربية").forEach { (code, label) ->
+                        FilterChip(
+                            selected = settings.language == code,
+                            onClick = { onSettingsChange(settings.copy(language = code)) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
+                Text(localizedText(language, "صدای یادآوری", "Reminder sound", "صوت التذكير"), color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    FilterChip(
+                        selected = selectedSoundMode == "DEFAULT",
+                        onClick = {
+                            ReminderScheduler.setSound(context, "DEFAULT")
+                            selectedSoundMode = "DEFAULT"
+                            selectedSoundUri = null
+                        },
+                        label = { Text(localizedText(language, "صدای دستگاه", "Device sound", "صوت الجهاز")) }
+                    )
+                    FilterChip(
+                        selected = selectedSoundMode == "SILENT",
+                        onClick = {
+                            ReminderScheduler.setSound(context, "SILENT")
+                            selectedSoundMode = "SILENT"
+                            selectedSoundUri = null
+                        },
+                        label = { Text(localizedText(language, "بی‌صدا", "Silent", "صامت")) }
+                    )
+                }
+                OutlinedButton(onClick = { soundPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.LibraryMusic, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (selectedSoundMode == "CUSTOM") localizedText(language, "تغییر فایل صدای انتخاب‌شده", "Change selected audio", "تغيير الصوت المحدد") else localizedText(language, "انتخاب صدا از حافظه", "Choose audio from storage", "اختر صوتاً من الذاكرة"))
+                }
+                if (selectedSoundMode == "CUSTOM") {
+                    Text(
+                        selectedSoundUri?.lastPathSegment ?: "فایل صوتی سفارشی انتخاب شده",
+                        color = Muted,
+                        fontSize = 10.sp
+                    )
+                    TextButton(onClick = {
+                        selectedSoundUri?.let { uri ->
+                            runCatching { RingtoneManager.getRingtone(context, uri)?.play() }
+                        }
+                    }) { Text("پخش نمونه صدا") }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("کاهش انیمیشن‌ها", color = White)
-                        Text("برای حرکت کمتر و مصرف پایین‌تر", color = Muted, fontSize = 10.sp)
+                        Text(localizedText(language, "کاهش انیمیشن‌ها", "Reduce motion", "تقليل الحركة"), color = White)
+                        Text(localizedText(language, "برای حرکت کمتر و مصرف پایین‌تر", "Less motion and lower visual activity", "حركة أقل وتأثير بصري أخف"), color = Muted, fontSize = 10.sp)
                     }
                     Switch(checked = settings.reducedMotion, onCheckedChange = { onSettingsChange(settings.copy(reducedMotion = it)) })
                 }
             }
         }
+    }
+    if (showColorStudio) {
+        CustomAccentDialog(
+            initialAccent = settings.accent,
+            onDismiss = { showColorStudio = false },
+            onSave = { colorHex ->
+                onSettingsChange(settings.copy(accent = colorHex))
+                showColorStudio = false
+            }
+        )
+    }
+}
+
+private fun tintNumberPickerText(picker: NumberPicker, color: Int) {
+    for (index in 0 until picker.childCount) {
+        (picker.getChildAt(index) as? TextView)?.setTextColor(color)
     }
 }
 
@@ -736,14 +1204,17 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
 private fun HabitEditor(
     initial: HabitEntity?,
     dismiss: () -> Unit,
-    save: (String, String, String, String, String) -> Unit
+    save: (String, String, String, String, String, String) -> Unit
 ) {
+    val language = LocalSparkLanguage.current
+    val wheelTextColor = White.toArgb()
+    val useLightWheelTheme = wheelTextColor == Color(0xFF171923).toArgb()
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
     val days = listOf(
-        "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
-        "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
+        "MONDAY" to localizedText(language, "دوشنبه", "Monday", "الاثنين"), "TUESDAY" to localizedText(language, "سه‌شنبه", "Tuesday", "الثلاثاء"), "WEDNESDAY" to localizedText(language, "چهارشنبه", "Wednesday", "الأربعاء"),
+        "THURSDAY" to localizedText(language, "پنجشنبه", "Thursday", "الخميس"), "FRIDAY" to localizedText(language, "جمعه", "Friday", "الجمعة"), "SATURDAY" to localizedText(language, "شنبه", "Saturday", "السبت"), "SUNDAY" to localizedText(language, "یکشنبه", "Sunday", "الأحد")
     )
     var selectedDays by remember(initial) {
         mutableStateOf(
@@ -753,6 +1224,9 @@ private fun HabitEditor(
     }
     var reminderEnabled by remember(initial) {
         mutableStateOf(initial?.reminderTime?.isNotBlank() == true)
+    }
+    var reminderMode by remember(initial) {
+        mutableStateOf(initial?.reminderMode ?: "NOTIFICATION")
     }
     var selectedTime by remember(initial) {
         mutableStateOf(initial?.reminderTime?.takeIf { it.isNotBlank() })
@@ -769,16 +1243,16 @@ private fun HabitEditor(
     AlertDialog(
         onDismissRequest = dismiss,
         containerColor = Panel,
-        title = { Text(if (initial == null) "عادت جدید" else "ویرایش عادت", color = White) },
+        title = { Text(localizedText(language, if (initial == null) "عادت جدید" else "ویرایش عادت", if (initial == null) "New habit" else "Edit habit", if (initial == null) "عادة جديدة" else "تعديل العادة"), color = White) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedTextField(title, { title = it; error = null }, label = { Text("نام عادت") }, singleLine = true)
-                OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
-                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, minLines = 2)
+                OutlinedTextField(title, { title = it; error = null }, label = { Text(localizedText(language, "نام عادت", "Habit name", "اسم العادة")) }, singleLine = true)
+                OutlinedTextField(category, { category = it }, label = { Text(localizedText(language, "دسته‌بندی", "Category", "التصنيف")) }, singleLine = true)
+                OutlinedTextField(note, { note = it }, label = { Text(localizedText(language, "توضیحات (اختیاری)", "Description (optional)", "الوصف (اختياري)")) }, minLines = 2)
 
-                Text("روزهای تکرار عادت", color = White, fontWeight = FontWeight.SemiBold)
+                Text(localizedText(language, "روزهای تکرار عادت", "Repeat days", "أيام التكرار"), color = White, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "عادت برای کارهایی است که مرتب انجام می‌دهی. برای خرید یا کار یک‌باره، از بخش «کارها» استفاده کن.",
+                    localizedText(language, "عادت برای کارهایی است که مرتب انجام می‌دهی. برای خرید یا کار یک‌باره، از بخش «کارها» استفاده کن.", "Habits are for routines. Use Tasks for one-off items such as shopping.", "العادات للأنشطة المتكررة. استخدم المهام للأعمال لمرة واحدة مثل التسوق."),
                     color = Muted, fontSize = 11.sp
                 )
                 days.chunked(4).forEach { group ->
@@ -809,8 +1283,8 @@ private fun HabitEditor(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("یادآوری ساعت‌دار", color = White)
-                        Text("اختیاری است؛ اگر ساعت انتخاب نکنی، یادآوری تنظیم نمی‌شود.", color = Muted, fontSize = 10.sp)
+                        Text(localizedText(language, "یادآوری ساعت‌دار", "Timed reminder", "تذكير بوقت محدد"), color = White)
+                        Text(localizedText(language, "اختیاری است؛ اگر ساعت انتخاب نکنی، یادآوری تنظیم نمی‌شود.", "Optional. No reminder is scheduled without a selected time.", "اختياري. لن يتم ضبط تذكير دون اختيار وقت."), color = Muted, fontSize = 10.sp)
                     }
                     Switch(
                         checked = reminderEnabled,
@@ -821,6 +1295,23 @@ private fun HabitEditor(
                     )
                 }
                 if (reminderEnabled) {
+                    Text(localizedText(language, "روش یادآوری", "Reminder style", "طريقة التذكير"), color = White, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        FilterChip(
+                            selected = reminderMode == "NOTIFICATION",
+                            onClick = { reminderMode = "NOTIFICATION" },
+                            label = { Text(localizedText(language, "اعلان", "Notification", "إشعار")) }
+                        )
+                        FilterChip(
+                            selected = reminderMode == "ALARM",
+                            onClick = { reminderMode = "ALARM" },
+                            label = { Text(localizedText(language, "زنگ هشدار", "Ringing alarm", "منبه رنان")) }
+                        )
+                    }
+                    Text(
+                        localizedText(language, "حالت زنگ هشدار تا وقتی خودت متوقفش نکنی ادامه دارد.", "Alarm mode keeps ringing until you stop it.", "يستمر المنبه بالرنين حتى توقفه."),
+                        color = Muted, fontSize = 10.sp
+                    )
                     OutlinedButton(
                         onClick = {
                             val parts = selectedTime?.split(":")
@@ -835,13 +1326,13 @@ private fun HabitEditor(
                         Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF42A5F5))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            selectedTime ?: "انتخاب ساعت",
+                            selectedTime ?: localizedText(language, "انتخاب ساعت", "Choose time", "اختر الوقت"),
                             color = if (selectedTime == null) Muted else White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(Modifier.weight(1f))
-                        Text("تنظیم", color = Color(0xFF64B5F6), fontSize = 12.sp)
+                        Text(localizedText(language, "تنظیم", "Set time", "ضبط الوقت"), color = Color(0xFF64B5F6), fontSize = 12.sp)
                     }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
@@ -849,54 +1340,62 @@ private fun HabitEditor(
         },
         confirmButton = {
             TextButton(onClick = {
-                if (title.isBlank()) error = "عنوان نمی‌تواند خالی باشد."
-                else if (selectedDays.isEmpty()) error = "حداقل یک روز برای تکرار عادت انتخاب کن."
+                if (title.isBlank()) error = localizedText(language, "عنوان نمی‌تواند خالی باشد.", "A title is required.", "العنوان مطلوب.")
+                else if (selectedDays.isEmpty()) error = localizedText(language, "حداقل یک روز برای تکرار عادت انتخاب کن.", "Select at least one repeat day.", "اختر يوماً واحداً على الأقل للتكرار.")
                 else {
                     save(
                         title, note, category,
                         days.filter { it.first in selectedDays }.joinToString(",") { it.first },
-                        if (reminderEnabled) selectedTime.orEmpty() else ""
+                        if (reminderEnabled) selectedTime.orEmpty() else "",
+                        if (reminderEnabled) reminderMode else "NOTIFICATION"
                     )
                 }
-            }) { Text("ذخیره", color = Violet) }
+            }) { Text(localizedText(language, "ذخیره", "Save", "حفظ"), color = Violet) }
         },
-        dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } }
+        dismissButton = { TextButton(onClick = dismiss) { Text(localizedText(language, "انصراف", "Cancel", "إلغاء"), color = Muted) } }
     )
 
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
             containerColor = Panel,
-            title = { Text("انتخاب ساعت یادآوری", color = White) },
+            title = { Text(localizedText(language, "انتخاب ساعت یادآوری", "Choose reminder time", "اختر وقت التذكير"), color = White) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Text("ساعت", color = Muted)
-                        Text("دقیقه", color = Muted)
+                        Text(localizedText(language, "ساعت", "Hour", "الساعة"), color = Muted)
+                        Text(localizedText(language, "دقیقه", "Minute", "الدقيقة"), color = Muted)
                     }
                     AndroidView(
                         modifier = Modifier.fillMaxWidth().height(150.dp),
                         factory = { context ->
-                            LinearLayout(context).apply {
+                            val wheelContext = ContextThemeWrapper(
+                                context,
+                                if (useLightWheelTheme) android.R.style.Theme_Material_Light
+                                else android.R.style.Theme_Material
+                            )
+                            LinearLayout(wheelContext).apply {
                                 orientation = LinearLayout.HORIZONTAL
                                 gravity = Gravity.CENTER
                                 addView(
-                                    NumberPicker(context).apply {
+                                    NumberPicker(wheelContext).apply {
                                         minValue = 0
                                         maxValue = 23
                                         wrapSelectorWheel = true
                                         setFormatter { value -> String.format(Locale.ROOT, "%02d", value) }
                                         setOnValueChangedListener { _, _, newValue -> draftHour = newValue }
+                                        post { tintNumberPickerText(this, wheelTextColor) }
                                     },
                                     LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
                                 )
                                 addView(
-                                    NumberPicker(context).apply {
+                                    NumberPicker(wheelContext).apply {
                                         minValue = 0
                                         maxValue = 59
                                         wrapSelectorWheel = true
                                         setFormatter { value -> String.format(Locale.ROOT, "%02d", value) }
                                         setOnValueChangedListener { _, _, newValue -> draftMinute = newValue }
+                                        post { tintNumberPickerText(this, wheelTextColor) }
                                     },
                                     LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
                                 )
@@ -905,6 +1404,8 @@ private fun HabitEditor(
                         update = { wheels ->
                             val hourWheel = wheels.getChildAt(0) as NumberPicker
                             val minuteWheel = wheels.getChildAt(1) as NumberPicker
+                            tintNumberPickerText(hourWheel, wheelTextColor)
+                            tintNumberPickerText(minuteWheel, wheelTextColor)
                             if (hourWheel.value != draftHour) hourWheel.value = draftHour
                             if (minuteWheel.value != draftMinute) minuteWheel.value = draftMinute
                         }
@@ -923,10 +1424,10 @@ private fun HabitEditor(
                 TextButton(onClick = {
                     selectedTime = String.format(Locale.ROOT, "%02d:%02d", draftHour, draftMinute)
                     showTimePicker = false
-                }) { Text("تأیید", color = Color(0xFF64B5F6)) }
+                }) { Text(localizedText(language, "تأیید", "Confirm", "تأكيد"), color = Color(0xFF64B5F6)) }
             },
             dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("انصراف", color = Muted) }
+                TextButton(onClick = { showTimePicker = false }) { Text(localizedText(language, "انصراف", "Cancel", "إلغاء"), color = Muted) }
             }
         )
     }

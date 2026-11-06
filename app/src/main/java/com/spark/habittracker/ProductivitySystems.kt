@@ -307,7 +307,10 @@ interface ProductivityDao {
         if (changed == 0) return false
         insertTaskHistory(TaskCompletionEntity(taskId = taskId, completed = completed, activityDate = date, completedAt = atMillis))
         if (completed) disableRemindersForOwner("TASK", taskId)
-        if (completed && task.recurrenceRule != null && task.dueDate != null) {
+        if (
+            completed && task.recurrenceRule != null && task.dueDate != null &&
+            hasRemainingTaskOccurrences(task)
+        ) {
             val rootId = task.recurrenceParentId ?: task.id
             val currentDueDate = LocalDate.parse(task.dueDate)
             val anchorDay = findTaskForCompletion(rootId)?.dueDate
@@ -325,6 +328,7 @@ interface ProductivityDao {
                     reminderAt = null,
                     archived = false,
                     recurrenceParentId = rootId,
+                    repeatRemainingCount = task.repeatRemainingCount?.minus(1),
                     createdAt = atMillis,
                     updatedAt = atMillis
                 ))

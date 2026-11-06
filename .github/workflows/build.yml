@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [main, master, spark-5.0]
+    branches: [main, master, spark-5.0, feature/spark-polish-i18n-reminders]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -36,6 +36,9 @@ jobs:
       - name: Run unit tests and assemble debug and release APKs
         run: gradle testDebugUnitTest assembleDebug assembleRelease --stacktrace
 
+      - name: Stop Gradle daemons before starting emulator
+        run: gradle --stop
+
       - name: Run database migration instrumentation tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -44,11 +47,11 @@ jobs:
           arch: x86_64
           profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -wipe-data
-          disable-animations: true
-          emulator-boot-timeout: 900
+          disable-animations: false
+          emulator-boot-timeout: 1200
           cores: 2
-          ram-size: 4096
-          heap-size: 512
+          ram-size: 2048
+          heap-size: 256
           script: bash .github/scripts/run-instrumentation-tests.sh
 
       - name: Upload instrumentation diagnostics

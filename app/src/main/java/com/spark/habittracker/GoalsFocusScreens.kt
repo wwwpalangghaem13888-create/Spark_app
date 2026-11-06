@@ -18,6 +18,7 @@ import java.util.Locale
 
 @Composable
 fun GoalsScreen(repository: ProductivityRepository, tasks: List<TaskEntity>, habits: List<HabitEntity>, modifier: Modifier = Modifier) {
+    val language = LocalSparkLanguage.current
     val goals by repository.observeGoals().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var editorOpen by remember { mutableStateOf(false) }
@@ -33,17 +34,17 @@ fun GoalsScreen(repository: ProductivityRepository, tasks: List<TaskEntity>, hab
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("اهداف من", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("پیشرفت فقط از فعالیت‌های ثبت‌شده محاسبه می‌شود.", style = MaterialTheme.typography.bodySmall)
+                    Text(localizedText(language, "هدف‌های من", "My goals", "أهدافي"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(localizedText(language, "پیشرفت بر اساس فعالیت‌هایی است که ثبت کرده‌ای.", "Progress is based on activity you have recorded.", "يُحسب التقدم بناءً على الأنشطة التي سجلتها."), style = MaterialTheme.typography.bodySmall)
                 }
-                Button(onClick = { title = ""; description = ""; target = "5"; targetDate = ""; selectedTaskIds = emptySet(); selectedHabitIds = emptySet(); error = null; editorOpen = true }) { Text("هدف جدید") }
+                Button(onClick = { title = ""; description = ""; target = "5"; targetDate = ""; selectedTaskIds = emptySet(); selectedHabitIds = emptySet(); error = null; editorOpen = true }) { Text(localizedText(language, "هدف جدید", "New goal", "هدف جديد")) }
             }
         }
         if (goals.isEmpty()) item {
             Card {
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("هنوز هدفی ثبت نشده است.")
-                    Text("یک هدف قابل‌اندازه‌گیری بساز و وظایف مرتبط را به آن وصل کن.", style = MaterialTheme.typography.bodySmall)
+                    Text(localizedText(language, "هنوز هدفی ثبت نکردی.", "You haven't added a goal yet.", "لم تضف هدفاً بعد."))
+                    Text(localizedText(language, "یک هدف مشخص بساز و کارهای مرتبط را به آن وصل کن.", "Create a measurable goal and link related tasks.", "أنشئ هدفاً قابلاً للقياس واربط به المهام المرتبطة."), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -136,6 +137,7 @@ fun GoalsScreen(repository: ProductivityRepository, tasks: List<TaskEntity>, hab
 
 @Composable
 fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifier) {
+    val language = LocalSparkLanguage.current
     val session by repository.observeActiveFocusSession().collectAsState(initial = null)
     val activeSession = session
     val scope = rememberCoroutineScope()
@@ -145,14 +147,20 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
     var selectedMode by remember { mutableStateOf("FOCUS") }
     var customMinutes by remember { mutableStateOf("25") }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(activeSession?.id, activeSession?.pausedAt) {
-        while (true) { now = System.currentTimeMillis(); delay(1000) }
+    LaunchedEffect(activeSession?.id, activeSession?.pausedAt, activeSession?.mode) {
+        val tickMillis = if (activeSession?.mode == "STOPWATCH") 10L else 1000L
+        while (true) { now = System.currentTimeMillis(); delay(tickMillis) }
     }
     val remaining = activeSession?.let { focusRemainingSeconds(it, now) }
     val elapsed = activeSession?.let { focusElapsedSeconds(it, now) } ?: 0L
+    val elapsedMillis = activeSession?.let {
+        val end = it.pausedAt ?: now
+        (end - it.startedAt - it.accumulatedPausedSeconds * 1000L).coerceAtLeast(0L)
+    } ?: 0L
     val displaySeconds = if (activeSession?.mode == "STOPWATCH") elapsed else (remaining ?: 0L)
     val minutes = displaySeconds / 60
     val seconds = displaySeconds % 60
+    val hundredths = (elapsedMillis % 1000L) / 10L
     val progress = activeSession?.let {
         if (it.mode == "STOPWATCH" || it.plannedDurationSeconds <= 0) 0f
         else (1f - (remaining ?: 0L).toFloat() / it.plannedDurationSeconds).coerceIn(0f, 1f)
@@ -178,20 +186,20 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
 
     Column(modifier = modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text("Spark Focus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("جلسه با زمان واقعی ذخیره می‌شود؛ بستن برنامه تایمر را صفر نمی‌کند.", style = MaterialTheme.typography.bodySmall)
+        Text(localizedText(language, "تمرکز Spark", "Spark Focus", "تركيز Spark"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(localizedText(language, "زمان جلسه واقعی ذخیره می‌شود؛ بستن برنامه تایمر را صفر نمی‌کند.", "Session time is tracked in real time, even if you close the app.", "يُسجل وقت الجلسة فعلياً حتى عند إغلاق التطبيق."), style = MaterialTheme.typography.bodySmall)
         if (activeSession == null) {
             if (lastSessionCompleted) {
                 Text("جلسه با موفقیت ثبت شد.", color = MaterialTheme.colorScheme.primary)
             }
-            Text("نوع جلسه")
+            Text(localizedText(language, "نوع جلسه", "Session type", "نوع الجلسة"))
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                listOf("FOCUS" to "تمرکز", "SHORT_BREAK" to "استراحت کوتاه", "LONG_BREAK" to "استراحت بلند", "STOPWATCH" to "کرنومتر").forEach { (key, label) ->
+                listOf("FOCUS" to localizedText(language, "تمرکز", "Focus", "تركيز"), "SHORT_BREAK" to localizedText(language, "استراحت کوتاه", "Short break", "استراحة قصيرة"), "LONG_BREAK" to localizedText(language, "استراحت بلند", "Long break", "استراحة طويلة"), "STOPWATCH" to localizedText(language, "کرنومتر", "Stopwatch", "ساعة إيقاف")).forEach { (key, label) ->
                     FilterChip(selected = selectedMode == key, onClick = { selectedMode = key }, label = { Text(label) })
                 }
             }
             if (selectedMode != "STOPWATCH") {
-                Text("مدت جلسه")
+                Text(localizedText(language, "مدت جلسه", "Session length", "مدة الجلسة"))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     (if (selectedMode == "FOCUS") listOf(25L, 50L, 90L) else listOf(5L, 15L)).forEach { value ->
                         FilterChip(selected = selectedMinutes == value, onClick = { selectedMinutes = value; customMinutes = value.toString() },
@@ -201,7 +209,7 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
                 OutlinedTextField(customMinutes, {
                     customMinutes = it.filter(Char::isDigit)
                     customMinutes.toLongOrNull()?.takeIf { n -> n in 1L..180L }?.let { n -> selectedMinutes = n }
-                }, label = { Text("مدت دلخواه (۱ تا ۱۸۰ دقیقه)") }, singleLine = true)
+                }, label = { Text(localizedText(language, "مدت دلخواه (۱ تا ۱۸۰ دقیقه)", "Custom length (1–180 min)", "مدة مخصصة (١–١٨٠ دقيقة)")) }, singleLine = true)
             }
             Button(onClick = { lastSessionCompleted = false; scope.launch {
                 val start = System.currentTimeMillis()
@@ -212,18 +220,24 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
                     val reminderId = repository.insertReminder(reminder)
                     ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                 }
-            } }) { Text(if (selectedMode == "STOPWATCH") "شروع کرنومتر" else "شروع جلسه") }
+            } }) { Text(if (selectedMode == "STOPWATCH") localizedText(language, "شروع کرنومتر", "Start stopwatch", "ابدأ ساعة الإيقاف") else localizedText(language, "شروع جلسه", "Start session", "ابدأ الجلسة")) }
         } else {
             Spacer(Modifier.height(20.dp))
             Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(String.format(Locale.ROOT, "%02d:%02d", minutes, seconds), fontSize = 52.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        if (activeSession.mode == "STOPWATCH")
+                            String.format(Locale.ROOT, "%02d:%02d.%02d", minutes, seconds, hundredths)
+                        else String.format(Locale.ROOT, "%02d:%02d", minutes, seconds),
+                        fontSize = if (activeSession.mode == "STOPWATCH") 46.sp else 52.sp,
+                        fontWeight = FontWeight.Black
+                    )
                     Text(when {
-                        activeSession.mode == "STOPWATCH" -> "کرنومتر"
-                        activeSession.mode == "SHORT_BREAK" -> "استراحت کوتاه"
-                        activeSession.mode == "LONG_BREAK" -> "استراحت بلند"
-                        activeSession.pausedAt != null -> "متوقف‌شده"
-                        else -> "در حال تمرکز"
+                        activeSession.mode == "STOPWATCH" -> localizedText(language, "کرنومتر", "Stopwatch", "ساعة إيقاف")
+                        activeSession.mode == "SHORT_BREAK" -> localizedText(language, "استراحت کوتاه", "Short break", "استراحة قصيرة")
+                        activeSession.mode == "LONG_BREAK" -> localizedText(language, "استراحت بلند", "Long break", "استراحة طويلة")
+                        activeSession.pausedAt != null -> localizedText(language, "متوقف‌شده", "Paused", "متوقف")
+                        else -> localizedText(language, "در حال تمرکز", "Focusing", "قيد التركيز")
                     }, style = MaterialTheme.typography.titleMedium)
                 }
             }
@@ -232,7 +246,7 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
                 if (activeSession.pausedAt == null) Button(onClick = { scope.launch {
                     repository.updateFocusPause(activeSession.id, now, activeSession.accumulatedPausedSeconds)
                     repository.disableRemindersForOwner("FOCUS", activeSession.id)
-                } }) { Text("مکث") }
+                } }) { Text(localizedText(language, "مکث", "Pause", "إيقاف مؤقت")) }
                 else Button(onClick = { scope.launch {
                     val pausedSeconds = ((now - (activeSession.pausedAt ?: now)) / 1000).coerceAtLeast(0)
                     repository.updateFocusPause(activeSession.id, null, activeSession.accumulatedPausedSeconds + pausedSeconds)
@@ -243,12 +257,12 @@ fun FocusScreen(repository: ProductivityRepository, modifier: Modifier = Modifie
                         val reminderId = repository.insertReminder(reminder)
                         ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                     }
-                } }) { Text("ادامه") }
+                } }) { Text(localizedText(language, "ادامه", "Resume", "استئناف")) }
                 TextButton(onClick = { scope.launch {
                     val actual = if (activeSession.mode == "STOPWATCH") elapsed else (activeSession.plannedDurationSeconds - (remaining ?: 0L)).coerceAtLeast(0)
                     repository.finishFocusSession(activeSession.id, actual, activeSession.mode == "STOPWATCH" || remaining == 0L, now)
                     repository.disableRemindersForOwner("FOCUS", activeSession.id)
-                } }) { Text("پایان جلسه") }
+                } }) { Text(localizedText(language, "پایان جلسه", "End session", "إنهاء الجلسة")) }
             }
             if (activeSession.mode != "STOPWATCH" && remaining == 0L) Text("زمان جلسه تمام شد.", color = MaterialTheme.colorScheme.primary)
         }

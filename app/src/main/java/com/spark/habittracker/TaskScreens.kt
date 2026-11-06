@@ -20,6 +20,10 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -32,6 +36,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,6 +69,7 @@ fun TaskListScreen(
     archivedTasks: List<TaskEntity>,
     productivityDao: ProductivityDao
 ) {
+    val language = LocalSparkLanguage.current
     var showArchived by remember { mutableStateOf(false) }
     var selectedSubtaskTaskId by remember { mutableStateOf<Long?>(null) }
     var search by remember { mutableStateOf("") }
@@ -87,24 +94,24 @@ fun TaskListScreen(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("کارها", style = MaterialTheme.typography.headlineSmall)
+        Text(localizedText(language, "کارها", "Tasks", "المهام"), style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("جست‌وجوی عنوان، توضیح یا برچسب") },
+            label = { Text(localizedText(language, "جست‌وجوی عنوان، توضیح یا برچسب", "Search title, description or tag", "ابحث بالعنوان أو الوصف أو الوسم")) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("همه", "باز", "انجام‌شده", "عقب‌افتاده").forEachIndexed { index, label ->
+            listOf(localizedText(language, "همه", "All", "الكل"), localizedText(language, "باز", "Open", "مفتوحة"), localizedText(language, "انجام‌شده", "Done", "مكتملة"), localizedText(language, "عقب‌افتاده", "Overdue", "متأخرة")).forEachIndexed { index, label ->
                 FilterChip(
                     selected = filter == index,
                     onClick = { filter = index },
                     label = { Text(label) }
                 )
             }
-            FilterChip(selected = showArchived, onClick = { showArchived = !showArchived }, label = { Text(if (showArchived) "نمایش فعال‌ها" else "بایگانی") })
+            FilterChip(selected = showArchived, onClick = { showArchived = !showArchived }, label = { Text(if (showArchived) localizedText(language, "نمایش فعال‌ها", "Show active", "عرض النشطة") else localizedText(language, "بایگانی", "Archived", "الأرشيف")) })
         }
         if (visible.isEmpty()) {
             Column(
@@ -112,8 +119,8 @@ fun TaskListScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(Icons.Default.AddTask, contentDescription = null)
-                Text(if (sourceTasks.isEmpty()) if (showArchived) "کار بایگانی‌شده‌ای وجود ندارد." else "هنوز کاری ثبت نشده." else "موردی با این فیلتر پیدا نشد.")
-                Text("برای ثبت اولین کار از دکمه افزودن استفاده کن.")
+                Text(if (sourceTasks.isEmpty()) if (showArchived) localizedText(language, "کار بایگانی‌شده‌ای وجود ندارد.", "No archived tasks.", "لا توجد مهام مؤرشفة.") else localizedText(language, "هنوز کاری ثبت نکردی.", "No tasks yet.", "لم تسجل أي مهام بعد.") else localizedText(language, "موردی با این فیلتر پیدا نشد.", "No tasks match this filter.", "لا توجد مهام تطابق هذا التصفية."))
+                Text(localizedText(language, "برای ثبت اولین کار از دکمه افزودن استفاده کن.", "Tap Add to create your first task.", "اضغط إضافة لإنشاء مهمتك الأولى."))
             }
         } else {
             LazyColumn(
@@ -151,6 +158,7 @@ private fun TaskCard(
     onManageSubtasks: () -> Unit,
     onRestore: () -> Unit
 ) {
+    val language = LocalSparkLanguage.current
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val overdue = taskIsOverdue(task, LocalDate.now())
@@ -174,40 +182,40 @@ private fun TaskCard(
             val details = listOfNotNull(
                 task.category,
                 taskPriorityLabel(task.priority),
-                task.dueDate?.let { "مهلت: $it" },
-                task.startAt?.let { "شروع: " + formatTaskTime(it) },
-                task.endAt?.let { "پایان: " + formatTaskTime(it) }
+                task.dueDate?.let { localizedText(language, "مهلت: $it", "Due: $it", "الموعد: $it") },
+                task.startAt?.let { localizedText(language, "شروع: ", "Start: ", "البداية: ") + formatTaskTime(it) },
+                task.endAt?.let { localizedText(language, "پایان: ", "End: ", "النهاية: ") + formatTaskTime(it) }
             ).joinToString(" • ")
             Text(details, style = MaterialTheme.typography.bodySmall)
             if (task.description.isNotBlank()) {
                 Text(task.description, style = MaterialTheme.typography.bodySmall, maxLines = 2)
             }
-            if (overdue) Text("عقب‌افتاده", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+            if (overdue) Text(localizedText(language, "عقب‌افتاده", "Overdue", "متأخرة"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
             if (task.tags.isNotBlank()) Text(task.tags, style = MaterialTheme.typography.labelSmall)
         }
         Box {
             TextButton(onClick = { menuOpen = true }) { Text("•••") }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("ویرایش") },
+                    text = { Text(localizedText(language, "ویرایش", "Edit", "تعديل")) },
                     leadingIcon = { Icon(Icons.Default.Edit, null) },
                     onClick = { menuOpen = false; onEdit() }
                 )
                 DropdownMenuItem(
-                    text = { Text("زیرکارها") },
+                    text = { Text(localizedText(language, "زیرکارها", "Subtasks", "المهام الفرعية")) },
                     onClick = { menuOpen = false; onManageSubtasks() }
                 )
                 DropdownMenuItem(
-                    text = { Text("کپی کار") },
+                    text = { Text(localizedText(language, "کپی کار", "Duplicate task", "نسخ المهمة")) },
                     onClick = { menuOpen = false; onDuplicate() }
                 )
                 DropdownMenuItem(
-                    text = { Text(if (task.archived) "بازیابی از بایگانی" else "بایگانی") },
+                    text = { Text(if (task.archived) localizedText(language, "بازیابی از بایگانی", "Restore from archive", "استعادة من الأرشيف") else localizedText(language, "بایگانی", "Archive", "أرشفة")) },
                     leadingIcon = { Icon(Icons.Default.Archive, null) },
                     onClick = { menuOpen = false; if (task.archived) onRestore() else onArchive() }
                 )
                 DropdownMenuItem(
-                    text = { Text("حذف دائمی") },
+                    text = { Text(localizedText(language, "حذف دائمی", "Delete permanently", "حذف نهائي")) },
                     leadingIcon = { Icon(Icons.Default.Delete, null) },
                     onClick = { menuOpen = false; confirmDelete = true }
                 )
@@ -216,8 +224,8 @@ private fun TaskCard(
     }
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
-        title = { Text("حذف دائمی کار؟") },
-        text = { Text("این عملیات قابل بازگشت نیست و زیرکارها و تاریخچهٔ وابسته نیز حذف می‌شوند.") },
+        title = { Text(localizedText(language, "حذف دائمی کار؟", "Delete task permanently?", "حذف المهمة نهائياً؟")) },
+        text = { Text(localizedText(language, "این کار برنمی‌گردد و زیرکارها و تاریخچهٔ وابسته هم حذف می‌شوند.", "This cannot be undone. Subtasks and related history will also be deleted.", "لا يمكن التراجع عن هذا. ستُحذف المهام الفرعية والسجل المرتبط أيضاً.")) },
         confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("حذف") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("انصراف") } }
     )
@@ -226,15 +234,16 @@ private fun TaskCard(
 
 @Composable
 private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: () -> Unit) {
+    val language = LocalSparkLanguage.current
     val subtasks by dao.observeSubtasks(taskId).collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("زیرکارهای این کار") },
+        title = { Text(localizedText(language, "زیرکارهای این کار", "Subtasks", "المهام الفرعية")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text("عنوان زیرکار") }, singleLine = true)
+                OutlinedTextField(title, { title = it }, label = { Text(localizedText(language, "عنوان زیرکار", "Subtask title", "عنوان المهمة الفرعية")) }, singleLine = true)
                 subtasks.forEach { item ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Checkbox(
@@ -253,30 +262,59 @@ private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: ()
                     dao.saveSubtask(TaskSubtaskEntity(taskId = taskId, title = title.trim(), position = subtasks.size))
                     title = ""
                 }
-            }) { Text("افزودن") }
+            }) { Text(localizedText(language, "افزودن", "Add", "إضافة")) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("بستن") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localizedText(language, "بستن", "Close", "إغلاق")) } }
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskEditorDialog(
     initial: TaskEntity?,
     onDismiss: () -> Unit,
     onSave: (TaskEntity) -> Unit
 ) {
+    val language = LocalSparkLanguage.current
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var description by remember(initial) { mutableStateOf(initial?.description.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
     var dueDate by remember(initial) { mutableStateOf(initial?.dueDate.orEmpty()) }
+    var showDueDatePicker by remember { mutableStateOf(false) }
+    val parsedDueDate = remember(dueDate) { runCatching { LocalDate.parse(dueDate) }.getOrNull() }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = parsedDueDate?.toEpochDay()?.times(86_400_000L)
+    )
     var startAt by remember(initial) { mutableStateOf(initial?.startAt?.let { formatTaskTime(it) }.orEmpty()) }
     var endAt by remember(initial) { mutableStateOf(initial?.endAt?.let { formatTaskTime(it) }.orEmpty()) }
     var reminderAt by remember(initial) { mutableStateOf(initial?.reminderAt?.let { formatTaskTime(it) }.orEmpty()) }
-    var recurrence by remember(initial) { mutableStateOf(initial?.recurrenceRule?.substringBefore(":")) }
+    var recurrence by remember(initial) {
+        mutableStateOf(initial?.recurrenceRule?.substringBefore(":") ?: "WEEKLY")
+    }
+    var taskKind by remember(initial) {
+        mutableStateOf(
+            when {
+                initial?.recurrenceRule == null -> "ONE_OFF"
+                initial.repeatRemainingCount != null -> "LIMITED"
+                else -> "PERMANENT"
+            }
+        )
+    }
+    var repeatTotalCountText by remember(initial) {
+        mutableStateOf(
+            ((initial?.repeatRemainingCount ?: 2) + if (initial?.repeatRemainingCount != null) 1 else 0)
+                .coerceIn(if (initial?.repeatRemainingCount == 0) 1 else 2, 1000).toString()
+        )
+    }
     var reminderEnabled by remember(initial) { mutableStateOf(initial?.reminderAt != null) }
     val weekdays = listOf(
-        "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
-        "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
+        "MONDAY" to localizedText(language, "دوشنبه", "Monday", "الاثنين"),
+        "TUESDAY" to localizedText(language, "سه‌شنبه", "Tuesday", "الثلاثاء"),
+        "WEDNESDAY" to localizedText(language, "چهارشنبه", "Wednesday", "الأربعاء"),
+        "THURSDAY" to localizedText(language, "پنجشنبه", "Thursday", "الخميس"),
+        "FRIDAY" to localizedText(language, "جمعه", "Friday", "الجمعة"),
+        "SATURDAY" to localizedText(language, "شنبه", "Saturday", "السبت"),
+        "SUNDAY" to localizedText(language, "یکشنبه", "Sunday", "الأحد")
     )
     var weeklyDays by remember(initial) {
         mutableStateOf(
@@ -290,44 +328,145 @@ fun TaskEditorDialog(
     }
     var tags by remember(initial) { mutableStateOf(initial?.tags.orEmpty()) }
     var priority by remember(initial) { mutableIntStateOf(initial?.priority ?: 1) }
+    var showAdvanced by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    if (showDueDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDueDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        dueDate = LocalDate.ofEpochDay(millis / 86_400_000L).toString()
+                        error = null
+                    }
+                    showDueDatePicker = false
+                }) { Text(localizedText(language, "تأیید", "Confirm", "تأكيد")) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        dueDate = LocalDate.now().toString()
+                        error = null
+                        showDueDatePicker = false
+                    }) { Text(localizedText(language, "امروز", "Today", "اليوم")) }
+                    TextButton(onClick = { showDueDatePicker = false }) {
+                        Text(localizedText(language, "بستن", "Close", "إغلاق"))
+                    }
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null || initial.id == 0L) "کار جدید" else "ویرایش کار") },
+        title = {
+            Text(localizedText(language, if (initial == null || initial.id == 0L) "کار جدید" else "ویرایش کار",
+                if (initial == null || initial.id == 0L) "New task" else "Edit task",
+                if (initial == null || initial.id == 0L) "عمل جديد" else "تعديل العمل"))
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it; error = null }, label = { Text("عنوان") }, singleLine = true)
-                OutlinedTextField(description, { description = it }, label = { Text("توضیحات") }, minLines = 2)
-                OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
-                OutlinedTextField(dueDate, { dueDate = it; error = null }, label = { Text("مهلت (YYYY-MM-DD، اختیاری)") }, singleLine = true)
-                OutlinedTextField(startAt, { startAt = it; error = null }, label = { Text("زمان شروع (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
-                OutlinedTextField(endAt, { endAt = it; error = null }, label = { Text("زمان پایان (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
-                Text("این کار تکرار می‌شود؟")
-                Text("برای خرید، تماس و کارهای یک‌باره گزینه «یک‌باره» را نگه دار.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text(
+                    localizedText(language, "یک کار را ساده ثبت کن؛ جزئیات اضافه لازم نیست.", "Add a task simply; extra details are optional.", "أضف عملاً ببساطة؛ التفاصيل الإضافية اختيارية."),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = title, onValueChange = { title = it; error = null },
+                    label = { Text(localizedText(language, "عنوان کار", "Task title", "عنوان العمل")) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = category, onValueChange = { category = it },
+                    label = { Text(localizedText(language, "دسته‌بندی", "Category", "التصنيف")) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = dueDate,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(localizedText(language, "تاریخ انجام", "Due date", "تاريخ الإنجاز")) },
+                    placeholder = { Text(localizedText(language, "برای امروز یا یک تاریخ دیگر انتخاب کن", "Choose today or another date", "اختر اليوم أو تاريخاً آخر")) },
+                    trailingIcon = {
+                        TextButton(onClick = { showDueDatePicker = true }) {
+                            Text(localizedText(language, "انتخاب", "Choose", "اختيار"))
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().clickable { showDueDatePicker = true }
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
-                        selected = recurrence == null,
-                        onClick = { recurrence = null },
-                        label = { Text("یک‌باره") }
+                        selected = dueDate == LocalDate.now().toString(),
+                        onClick = { dueDate = LocalDate.now().toString(); error = null },
+                        label = { Text(localizedText(language, "فقط امروز", "Today", "اليوم")) }
+                    )
+                    if (dueDate.isNotBlank()) {
+                        FilterChip(
+                            selected = false,
+                            onClick = { dueDate = ""; error = null },
+                            label = { Text(localizedText(language, "بدون تاریخ", "No date", "بلا تاريخ")) }
+                        )
+                    }
+                }
+
+                Text(
+                    localizedText(language, "این کار چه مدلی است؟", "How should this task repeat?", "كيف تريد تكرار هذا العمل؟"),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    FilterChip(
+                        selected = taskKind == "ONE_OFF",
+                        onClick = { taskKind = "ONE_OFF"; error = null },
+                        label = { Text(localizedText(language, "فقط یک‌بار", "One time only", "مرة واحدة فقط")) }
                     )
                     FilterChip(
-                        selected = recurrence != null,
-                        onClick = { if (recurrence == null) recurrence = "WEEKLY" },
-                        label = { Text("تکرارشونده") }
+                        selected = taskKind == "LIMITED",
+                        onClick = { taskKind = "LIMITED"; error = null },
+                        label = { Text(localizedText(language, "موقت؛ تعداد مشخص", "Temporary; limited repeats", "مؤقت؛ عدد مرات محدد")) }
+                    )
+                    FilterChip(
+                        selected = taskKind == "PERMANENT",
+                        onClick = { taskKind = "PERMANENT"; error = null },
+                        label = { Text(localizedText(language, "دائمی؛ تا زمان توقف", "Ongoing; until stopped", "مستمر؛ حتى الإيقاف")) }
                     )
                 }
-                if (recurrence != null) {
-                    Text("الگوی تکرار")
+                if (taskKind == "LIMITED") {
+                    OutlinedTextField(
+                        value = repeatTotalCountText,
+                        onValueChange = { value ->
+                            repeatTotalCountText = value.filter(Char::isDigit).take(4)
+                            error = null
+                        },
+                        label = { Text(localizedText(language, "چند بار در مجموع؟", "Total number of occurrences", "كم مرة بالمجموع؟")) },
+                        supportingText = { Text(localizedText(language, "شامل همین نوبت؛ حداقل ۲ بار برای کار جدید", "Including this first one; at least 2 for a new task", "بما فيها المرة الأولى؛ مرتان على الأقل للعمل الجديد")) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (taskKind != "ONE_OFF") {
+                    Text(
+                        localizedText(language, "برنامه تکرار", "Repeat schedule", "جدول التكرار"),
+                        style = MaterialTheme.typography.titleSmall
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("WEEKLY" to "روزهای هفته", "DAILY" to "هر روز", "WEEKDAYS" to "روزهای کاری", "MONTHLY" to "ماهانه").forEach { (rule, label) ->
+                        listOf(
+                            "WEEKLY" to localizedText(language, "روزهای انتخابی", "Selected days", "أيام محددة"),
+                            "DAILY" to localizedText(language, "هر روز", "Every day", "كل يوم"),
+                            "WEEKDAYS" to localizedText(language, "روزهای کاری", "Weekdays", "أيام العمل"),
+                            "MONTHLY" to localizedText(language, "ماهانه", "Monthly", "شهرياً")
+                        ).forEach { (rule, label) ->
                             FilterChip(selected = recurrence == rule, onClick = { recurrence = rule }, label = { Text(label) })
                         }
                     }
                     if (recurrence == "WEEKLY") {
-                        Text("در چه روزهایی تکرار شود؟")
+                        Text(localizedText(language, "کدام روزها؟", "On which days?", "في أي أيام؟"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         weekdays.chunked(4).forEach { group ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                                 group.forEach { (key, label) ->
                                     FilterChip(
                                         selected = key in weeklyDays,
@@ -339,24 +478,59 @@ fun TaskEditorDialog(
                         }
                     }
                 }
+
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Checkbox(checked = reminderEnabled, onCheckedChange = { reminderEnabled = it; if (!it) reminderAt = "" })
-                    Text("برای این کار یادآوری لازم دارم")
+                    Text(localizedText(language, "یادآوری لازم دارم", "Set a reminder", "أريد تذكيراً"))
                 }
                 if (reminderEnabled) {
                     OutlinedTextField(
-                        reminderAt,
-                        { reminderAt = it; error = null },
-                        label = { Text("زمان یادآوری (yyyy-MM-ddTHH:mm)") },
-                        placeholder = { Text("خالی بماند = بدون ساعت یادآوری") },
-                        singleLine = true
+                        value = reminderAt,
+                        onValueChange = { reminderAt = it; error = null },
+                        label = { Text(localizedText(language, "زمان یادآوری (YYYY-MM-DDTHH:mm)", "Reminder time (YYYY-MM-DDTHH:mm)", "وقت التذكير (YYYY-MM-DDTHH:mm)")) },
+                        placeholder = { Text(localizedText(language, "خالی = بدون ساعت مشخص", "Leave blank for no fixed time", "اتركه فارغاً لوقت غير محدد")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-                OutlinedTextField(tags, { tags = it }, label = { Text("برچسب‌ها با ویرگول جدا شوند") }, singleLine = true)
-                Text("اولویت")
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    listOf("کم", "عادی", "زیاد", "فوری").forEachIndexed { index, label ->
-                        FilterChip(selected = priority == index, onClick = { priority = index }, label = { Text(label) })
+
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(
+                        if (showAdvanced) localizedText(language, "بستن جزئیات بیشتر", "Hide extra details", "إخفاء التفاصيل الإضافية")
+                        else localizedText(language, "جزئیات بیشتر (اختیاری)", "More details (optional)", "تفاصيل إضافية (اختياري)")
+                    )
+                }
+                if (showAdvanced) {
+                    OutlinedTextField(
+                        value = description, onValueChange = { description = it },
+                        label = { Text(localizedText(language, "توضیحات", "Description", "الوصف")) },
+                        minLines = 2, modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = startAt, onValueChange = { startAt = it; error = null },
+                        label = { Text(localizedText(language, "زمان شروع (YYYY-MM-DDTHH:mm)", "Start (YYYY-MM-DDTHH:mm)", "البداية (YYYY-MM-DDTHH:mm)")) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = endAt, onValueChange = { endAt = it; error = null },
+                        label = { Text(localizedText(language, "زمان پایان (YYYY-MM-DDTHH:mm)", "End (YYYY-MM-DDTHH:mm)", "النهاية (YYYY-MM-DDTHH:mm)")) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = tags, onValueChange = { tags = it },
+                        label = { Text(localizedText(language, "برچسب‌ها با ویرگول جدا شوند", "Comma-separated tags", "وسوم مفصولة بفواصل")) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(localizedText(language, "اولویت", "Priority", "الأولوية"))
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf(
+                            localizedText(language, "کم", "Low", "منخفضة"),
+                            localizedText(language, "عادی", "Normal", "عادية"),
+                            localizedText(language, "زیاد", "High", "مرتفعة"),
+                            localizedText(language, "فوری", "Urgent", "عاجلة")
+                        ).forEachIndexed { index, label ->
+                            FilterChip(selected = priority == index, onClick = { priority = index }, label = { Text(label) })
+                        }
                     }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -365,7 +539,7 @@ fun TaskEditorDialog(
         confirmButton = {
             Button(onClick = {
                 if (title.isBlank()) {
-                    error = "عنوان کار نمی‌تواند خالی باشد."
+                    error = localizedText(language, "عنوان کار نمی‌تواند خالی باشد.", "Task title cannot be empty.", "لا يمكن أن يكون عنوان العمل فارغاً.")
                 } else {
                     val normalizedDate = dueDate.trim().ifBlank { null }
                     try {
@@ -373,53 +547,136 @@ fun TaskEditorDialog(
                         val normalizedStart = startAt.trim().ifBlank { null }?.let(::parseTaskTime)
                         val normalizedEnd = endAt.trim().ifBlank { null }?.let(::parseTaskTime)
                         val normalizedReminder = reminderAt.trim().ifBlank { null }?.let(::parseTaskTime)
-                        require(
-                            normalizedReminder == null ||
-                                normalizedReminder > System.currentTimeMillis() ||
-                                normalizedReminder == initial?.reminderAt
-                        ) { "زمان یادآوری جدید باید در آینده باشد." }
+                        require(normalizedReminder == null || normalizedReminder > System.currentTimeMillis() || normalizedReminder == initial?.reminderAt) {
+                            localizedText(language, "زمان یادآوری باید در آینده باشد.", "Reminder must be in the future.", "يجب أن يكون التذكير في المستقبل.")
+                        }
                         require(normalizedStart == null || normalizedEnd == null || normalizedEnd > normalizedStart) {
-                            "زمان پایان باید بعد از زمان شروع باشد."
+                            localizedText(language, "زمان پایان باید بعد از شروع باشد.", "End time must be after start time.", "يجب أن يكون وقت النهاية بعد البداية.")
                         }
-                        require(recurrence == null || normalizedDate != null) {
-                            "برای کار تکرارشونده باید تاریخ شروع تعیین شود."
+                        val recurring = taskKind != "ONE_OFF"
+                        require(!recurring || normalizedDate != null) {
+                            localizedText(language, "برای کار تکرارشونده تاریخ شروع لازم است.", "A start date is required for recurring tasks.", "يلزم تاريخ بدء للعمل المتكرر.")
                         }
-                        require(recurrence != "WEEKLY" || weeklyDays.isNotEmpty()) {
-                            "برای تکرار هفتگی حداقل یک روز انتخاب کن."
+                        require(!recurring || recurrence != "WEEKLY" || weeklyDays.isNotEmpty()) {
+                            localizedText(language, "حداقل یک روز انتخاب کن.", "Select at least one day.", "اختر يوماً واحداً على الأقل.")
+                        }
+                        val repeatTotalCount = repeatTotalCountText.toIntOrNull()
+                        require(
+                            taskKind != "LIMITED" ||
+                                (repeatTotalCount != null && repeatTotalCount in (if (initial?.repeatRemainingCount == 0) 1..1000 else 2..1000))
+                        ) {
+                            localizedText(language, "تعداد تکرار معتبر نیست.", "Enter a valid repeat count.", "أدخل عدداً صالحاً للتكرار.")
+                        }
+                        val rule = if (!recurring) null else when (recurrence) {
+                            "WEEKLY" -> "WEEKLY:" + weekdays.filter { it.first in weeklyDays }.joinToString(",") { it.first }
+                            else -> recurrence
                         }
                         onSave(
                             TaskEntity(
                                 id = initial?.id ?: 0,
-                                title = title,
-                                description = description,
-                                category = category,
+                                title = title.trim(),
+                                description = description.trim(),
+                                category = category.trim().ifBlank { "عمومی" },
                                 dueDate = normalizedDate,
                                 startAt = normalizedStart,
                                 endAt = normalizedEnd,
                                 reminderAt = if (reminderEnabled) normalizedReminder else null,
-                                recurrenceRule = when (recurrence) {
-                                    "WEEKLY" -> "WEEKLY:" + weekdays.filter { it.first in weeklyDays }.joinToString(",") { it.first }
-                                    else -> recurrence
-                                },
+                                recurrenceRule = rule,
                                 recurrenceParentId = initial?.recurrenceParentId,
                                 priority = priority,
                                 tags = tags,
                                 completed = initial?.completed ?: false,
                                 completedAt = initial?.completedAt,
                                 archived = initial?.archived ?: false,
-                                createdAt = initial?.createdAt ?: System.currentTimeMillis()
+                                createdAt = initial?.createdAt ?: System.currentTimeMillis(),
+                                updatedAt = System.currentTimeMillis(),
+                                repeatRemainingCount = if (taskKind == "LIMITED") (repeatTotalCount!! - 1) else null
                             )
                         )
+                    } catch (exception: IllegalArgumentException) {
+                        error = exception.message ?: localizedText(language, "اطلاعات واردشده معتبر نیست.", "The entered details are invalid.", "البيانات المدخلة غير صالحة.")
                     } catch (_: Exception) {
-                        error = "تاریخ یا زمان نامعتبر است؛ قالب‌های نمایش‌داده‌شده را بررسی کن."
+                        error = localizedText(language, "تاریخ یا زمان نامعتبر است.", "Invalid date or time.", "التاريخ أو الوقت غير صالح.")
                     }
                 }
-            }) { Text("ذخیره") }
+            }) { Text(localizedText(language, "ذخیره", "Save", "حفظ")) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localizedText(language, "انصراف", "Cancel", "إلغاء")) } }
     )
 }
 
+@Composable
+fun AppGuideDialog(language: String, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = {
+            Text(localizedText(language, "به SPARK خوش آمدی", "Welcome to SPARK", "مرحباً بك في SPARK"))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(localizedText(
+                    language,
+                    "SPARK کمک می‌کند کارها و عادت‌هایت را مرتب کنی؛ قرار نیست مدیریت روزت را سخت‌تر کند.",
+                    "SPARK helps you organize habits and tasks without making your day harder to manage.",
+                    "يساعدك SPARK على تنظيم عاداتك ومهامك دون تعقيد يومك."
+                ))
+                Text(localizedText(language, "۱. عادت‌ها: کارهایی که مرتب انجام می‌دهی؛ مثل ورزش یا مطالعه.", "1. Habits: routines you repeat, such as exercise or reading.", "١. العادات: أنشطة متكررة مثل الرياضة أو القراءة."))
+                Text(localizedText(language, "۲. کارها: خرید، قرارها و کارهای یک‌باره یا زمان‌دار.", "2. Tasks: shopping, appointments and one-off or scheduled work.", "٢. المهام: التسوق والمواعيد والأعمال لمرة واحدة أو المجدولة."))
+                Text(localizedText(language, "۳. تقویم: برنامه و فعالیت‌هایت را در روزهای مختلف ببین.", "3. Calendar: review your activity across days.", "٣. التقويم: راجع أنشطتك عبر الأيام."))
+                Text(localizedText(language, "۴. آمار و پیشرفت: روند انجام کارها و عادت‌هایت را دنبال کن.", "4. Statistics and Progress: track how your habits and tasks are going.", "٤. الإحصاءات والتقدم: تابع إنجاز عاداتك ومهامك."))
+                Text(localizedText(language, "۵. اهداف و تمرکز: برای مسیرت هدف بگذار و زمان تمرکز را ثبت کن.", "5. Goals and Focus: set targets and track focused time.", "٥. الأهداف والتركيز: حدد أهدافك وسجل وقت التركيز."))
+                Text(localizedText(language, "از بخش بیشتر به پشتیبان‌گیری و تنظیمات هم دسترسی داری. هر زمان خواستی، زبان و ظاهر برنامه را تغییر بده.", "Use More to find backup and settings. You can change the language and appearance whenever you like.", "استخدم «المزيد» للوصول إلى النسخ الاحتياطي والإعدادات. يمكنك تغيير اللغة والمظهر متى شئت."))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "شروع کنیم", "Let's start", "لنبدأ"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "رد کردن راهنما", "Skip guide", "تخطي الدليل"))
+            }
+        }
+    )
+}
+
+@Composable
+fun TaskGuideDialog(language: String, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = {
+            Text(localizedText(language, "راهنمای سریع بخش کارها", "Quick guide to Tasks", "دليل سريع لقسم المهام"))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text(
+                    localizedText(
+                        language,
+                        "اینجا کارهایی را ثبت کن که باید انجام بدهی؛ لازم نیست همه‌چیز را پیچیده کنی.",
+                        "Add things you need to do here. Keep it simple; extra details are optional.",
+                        "أضف هنا الأشياء التي تحتاج إلى إنجازها. اجعل الأمر بسيطاً؛ التفاصيل الإضافية اختيارية."
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(localizedText(language, "• یک‌باره: خرید ۲ کیلو گوجه برای امروز.", "• One time: buy 2 kg of tomatoes today.", "• مرة واحدة: شراء كيلوغرامين من الطماطم اليوم."))
+                Text(localizedText(language, "• موقت: تمرین در سه نوبت؛ تعداد و روزها را خودت تعیین کن.", "• Limited: repeat an activity three times; choose the count and days.", "• مؤقت: كرر نشاطاً ثلاث مرات؛ اختر العدد والأيام."))
+                Text(localizedText(language, "• دائمی: کاری که هر هفته یا هر روز ادامه دارد، تا وقتی متوقفش کنی.", "• Ongoing: something that repeats weekly or daily until you stop it.", "• مستمر: عمل يتكرر أسبوعياً أو يومياً حتى توقفه."))
+                Text(localizedText(language, "یادآوری و ساعت هم اختیاری هستند.", "Reminders and times are optional.", "التذكير والوقت اختياريان."))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "فهمیدم", "Got it", "فهمت"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) {
+                Text(localizedText(language, "رد کردن راهنما", "Skip guide", "تخطي الدليل"))
+            }
+        }
+    )
+}
 
 private fun parseTaskTime(value: String): Long =
     LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))

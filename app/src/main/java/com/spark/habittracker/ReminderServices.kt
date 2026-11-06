@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -40,9 +43,39 @@ internal fun nextHabitReminder(habit: HabitEntity, afterMillis: Long, zoneId: Zo
 object ReminderScheduler {
     const val ACTION_FIRE = "com.spark.habittracker.REMINDER_FIRE"
     const val ACTION_SNOOZE = "com.spark.habittracker.REMINDER_SNOOZE"
-    private const val CHANNEL_ID = "spark_reminders"
+    private const val SOUND_PREFS = "spark_reminder_sound"
+    private const val KEY_SOUND_MODE = "mode"
+    private const val KEY_SOUND_URI = "uri"
 
-    fun schedule(context: Context, reminder: ReminderEntity) {
+    /** DEFAULT uses the device notification tone, SILENT disables sound, CUSTOM uses a SAF URI. */
+    fun soundMode(context: Context): String =
+        context.getSharedPreferences(SOUND_PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_SOUND_MODE, "DEFAULT") ?: "DEFAULT"
+
+    fun customSoundUri(context: Context): Uri? =
+        context.getSharedPreferences(SOUND_PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_SOUND_URI, null)?.let(Uri::parse)
+
+    fun setSound(context: Context, mode: String, uri: Uri? = null) {
+        require(mode in setOf("DEFAULT", "SILENT", "CUSTOM"))
+        require(mode != "CUSTOM" || uri != null) { "A custom sound URI is required." }
+        context.getSharedPreferences(SOUND_PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_SOUND_MODE, mode)
+            .apply {
+                if (mode == "CUSTOM") putString(KEY_SOUND_URI, uri.toString())
+                else remove(KEY_SOUND_URI)
+            }
+            .apply()
+        ensureChannel(context)
+    }
+
+    private fun channelId(context: Context): String {
+        val mode = soundMode(context)
+        val uriKey = if (mode == "CUSTOM") customSoundUri(context)?.toString().orEmpty() else mode
+        return "spark_reminders_" + Integer.toHexString(uriKey.hashCode())
+    }
+
+    fun schedule(context: Context, reminder: ReminderEntity, alarmStyle: Boolean = false) {
         val intent = Intent(context, ReminderReceiver::class.java)
             .setAction(ACTION_FIRE)
             .putExtra("reminder_id", reminder.id)
@@ -53,7 +86,16 @@ object ReminderScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.snoozedUntil ?: reminder.triggerAt, pending)
+        val triggerAt = reminder.snoozedUntil ?: reminder.triggerAt
+        if (alarmStyle && reminder.snoozedUntil == null) {
+            val showIntent = PendingIntent.getActivity(
+                context, 910000 + reminder.id.toInt(), Intent(context, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarm.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, showIntent), pending)
+        } else {
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+        }
     }
 
     fun cancel(context: Context, reminderId: Long) {
@@ -69,7 +111,26 @@ object ReminderScheduler {
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "یادآورهای Spark", NotificationManager.IMPORTANCE_DEFAULT))
+            val id = channelId(context)
+            if (manager.getNotificationChannel(id) != null) return
+            val channel = NotificationChannel(
+                id,
+                "یادآورهای Spark",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            when (soundMode(context)) {
+                "SILENT" -> channel.setSound(null, null)
+                "CUSTOM" -> {
+                    val uri = customSoundUri(context)
+                    val audio = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                    channel.setSound(uri, audio)
+                }
+                else -> channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), null)
+            }
+            manager.createNotificationChannel(channel)
         }
     }
 
@@ -87,7 +148,7 @@ object ReminderScheduler {
             Intent(context, ReminderReceiver::class.java).setAction(ACTION_SNOOZE).putExtra("reminder_id", reminderId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, channelId(context))
             .setSmallIcon(R.drawable.spark_logo)
             .setContentTitle("یادآوری Spark")
             .setContentText(if (ownerType == "TASK") "زمان انجام این کار رسیده است." else "یادآوری برنامه‌ریزی‌شده")
@@ -112,17 +173,27 @@ class ReminderReceiver : BroadcastReceiver() {
                     if (intent.action == ReminderScheduler.ACTION_SNOOZE) {
                         val until = System.currentTimeMillis() + 10 * 60 * 1000L
                         dao.snoozeReminder(reminderId, until)
-                        dao.getEnabledReminders().firstOrNull { it.id == reminderId }?.let { ReminderScheduler.schedule(context, it) }
+                        dao.getEnabledReminders().firstOrNull { it.id == reminderId }?.let { pendingReminder ->
+                            val alarmStyle = pendingReminder.ownerType == "HABIT" &&
+                                db.habitDao().findHabit(pendingReminder.ownerId)?.reminderMode == "ALARM"
+                            ReminderScheduler.schedule(context, pendingReminder, alarmStyle)
+                        }
                     } else {
                         val reminder = dao.getEnabledReminders().firstOrNull { it.id == reminderId }
                         if (reminder != null) {
-                            ReminderScheduler.show(context, reminder.id, reminder.ownerType)
                             if (reminder.ownerType == "HABIT") {
                                 val habit = db.habitDao().findHabit(reminder.ownerId)
+                                if (habit?.reminderMode == "ALARM") {
+                                    val alarmIntent = Intent(context, AlarmRingingService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(alarmIntent)
+                                    else context.startService(alarmIntent)
+                                } else {
+                                    ReminderScheduler.show(context, reminder.id, reminder.ownerType)
+                                }
                                 val next = habit?.let { nextHabitReminder(it, System.currentTimeMillis() + 1000) }
                                 if (next != null) {
                                     dao.updateReminderTrigger(reminder.id, next)
-                                    ReminderScheduler.schedule(context, reminder.copy(triggerAt = next, snoozedUntil = null))
+                                    ReminderScheduler.schedule(context, reminder.copy(triggerAt = next, snoozedUntil = null), habit?.reminderMode == "ALARM")
                                 } else {
                                     dao.setReminderEnabled(reminder.id, false)
                                 }
@@ -193,7 +264,8 @@ class SparkBootReceiver : BroadcastReceiver() {
                                 db.productivityDao().updateReminderTrigger(reminder.id, nextTrigger)
                                 ReminderScheduler.schedule(
                                     context,
-                                    reminder.copy(triggerAt = nextTrigger, snoozedUntil = null)
+                                    reminder.copy(triggerAt = nextTrigger, snoozedUntil = null),
+                                    alarmStyle = habit?.reminderMode == "ALARM"
                                 )
                             } else {
                                 db.productivityDao().setReminderEnabled(reminder.id, false)

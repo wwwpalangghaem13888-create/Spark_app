@@ -46,7 +46,9 @@ data class TaskEntity(
     val completedAt: Long? = null,
     val archived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    /** Number of future occurrences remaining; null means unlimited or legacy recurrence. */
+    val repeatRemainingCount: Int? = null
 )
 
 @Dao
@@ -117,6 +119,10 @@ class TaskRepository(private val dao: TaskDao) {
         require(isSupportedTaskRecurrence(normalized.recurrenceRule)) {
             "Unsupported recurrence rule."
         }
+        require(
+            normalized.repeatRemainingCount == null ||
+                (normalized.recurrenceRule != null && normalized.repeatRemainingCount in 0..999)
+        ) { "Limited repeats require a recurrence rule and a remaining count from 0 to 999." }
         return if (normalized.id == 0L) dao.insert(normalized)
         else {
             dao.update(normalized)
@@ -187,3 +193,6 @@ internal fun isSupportedTaskRecurrence(rule: String?): Boolean {
         selectedDays.distinct().size == selectedDays.size &&
         selectedDays.all { it in validDays }
 }
+
+internal fun hasRemainingTaskOccurrences(task: TaskEntity): Boolean =
+    task.repeatRemainingCount == null || task.repeatRemainingCount > 0

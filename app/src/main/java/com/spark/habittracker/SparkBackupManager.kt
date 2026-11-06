@@ -94,6 +94,10 @@ object SparkBackupManager {
         require(taskLinks.all { it.goalId in goalIds && it.taskId in taskIds }) { "Goal-task link is invalid." }
         require(habitLinks.all { it.goalId in goalIds && it.habitId in habitIds }) { "Goal-habit link is invalid." }
         require(tasks.all { it.recurrenceParentId == null || it.recurrenceParentId in taskIds }) { "Recurring task references a missing parent." }
+        require(tasks.all {
+            it.repeatRemainingCount == null ||
+                (it.recurrenceRule != null && it.repeatRemainingCount in 0..999)
+        }) { "Limited recurrence count is invalid." }
         require(sessions.all { it.linkedTaskId == null || it.linkedTaskId in taskIds }) { "Focus session references a missing task." }
         require(reminders.all { reminder ->
             reminder.ownerId > 0 && (!reminder.enabled || when (reminder.ownerType) {
@@ -109,12 +113,14 @@ object SparkBackupManager {
             val days = rawDays.filter(String::isNotEmpty)
             days.isNotEmpty() && days.size == rawDays.size && days.distinct().size == days.size &&
                 days.all { it in allowedDays } &&
-                habit.reminderTime.isBlank() || runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess
+                (habit.reminderTime.isBlank() || runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess) &&
+                habit.reminderMode in setOf("NOTIFICATION", "ALARM")
         }) { "Habit schedule or reminder time is invalid." }
         require(settings == null || (
             settings.id == 1 &&
                 settings.theme in setOf("neon", "dark", "midnight", "neon-blue", "neon-green", "neon-pink", "neon-red", "minimal", "light") &&
-                settings.accent in setOf("violet", "cyan", "lime", "pink")
+                (settings.accent in setOf("violet", "cyan", "lime", "pink") || settings.accent.matches(Regex("^#[0-9A-Fa-f]{6}$"))) &&
+                settings.language in setOf("fa", "en", "ar")
         )) { "Appearance settings are invalid." }
 
         // Room's REPLACE strategy would overwrite an unrelated row with a colliding ID.
@@ -202,7 +208,7 @@ object SparkBackupManager {
     private fun HabitEntity.toJson() = JSONObject()
         .put("id", id).put("title", title).put("note", note).put("category", category)
         .put("createdAt", createdAt).put("scheduledDays", scheduledDays)
-        .put("reminderTime", reminderTime).put("isEnabled", isEnabled)
+        .put("reminderTime", reminderTime).put("isEnabled", isEnabled).put("reminderMode", reminderMode)
 
     private fun HabitLogEntity.toJson() = JSONObject()
         .put("id", id).put("habitId", habitId).put("date", date)
@@ -216,6 +222,7 @@ object SparkBackupManager {
         .put("priority", priority).put("tags", tags).put("completed", completed)
         .put("completedAt", completedAt ?: JSONObject.NULL).put("archived", archived)
         .put("createdAt", createdAt).put("updatedAt", updatedAt)
+        .put("repeatRemainingCount", repeatRemainingCount ?: JSONObject.NULL)
 
     private fun TaskSubtaskEntity.toJson() = JSONObject()
         .put("id", id).put("taskId", taskId).put("title", title).put("isCompleted", isCompleted)
@@ -246,13 +253,15 @@ object SparkBackupManager {
 
     private fun UserSettingsEntity.toJson() = JSONObject()
         .put("id", id).put("theme", theme).put("accent", accent).put("reducedMotion", reducedMotion)
+        .put("language", language)
 
     private fun JSONObject.toHabit() = HabitEntity(
         id = requiredLong("id"), title = requiredString("title"), note = optString("note"),
         category = optString("category", "عمومی"), createdAt = requiredLong("createdAt"),
         scheduledDays = optString("scheduledDays", "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY")
             .split(",").map { it.trim().uppercase(java.util.Locale.ROOT) }.filter { it.isNotEmpty() }.distinct().joinToString(","),
-        reminderTime = optString("reminderTime", "08:00"), isEnabled = optBoolean("isEnabled", true)
+        reminderTime = optString("reminderTime", "08:00"), isEnabled = optBoolean("isEnabled", true),
+        reminderMode = optString("reminderMode", "NOTIFICATION")
     )
 
     private fun JSONObject.toHabitLog() = HabitLogEntity(
@@ -267,7 +276,8 @@ object SparkBackupManager {
         recurrenceRule = optNullableString("recurrenceRule"), recurrenceParentId = optionalLong("recurrenceParentId"),
         priority = optInt("priority", 1), tags = optString("tags"), completed = optBoolean("completed"),
         completedAt = optionalLong("completedAt"), archived = optBoolean("archived"),
-        createdAt = requiredLong("createdAt"), updatedAt = requiredLong("updatedAt")
+        createdAt = requiredLong("createdAt"), updatedAt = requiredLong("updatedAt"),
+        repeatRemainingCount = if (has("repeatRemainingCount") && !isNull("repeatRemainingCount")) getInt("repeatRemainingCount") else null
     ).also {
         it.dueDate?.let(LocalDate::parse)
         require(it.startAt == null || it.endAt == null || it.endAt > it.startAt)
@@ -316,6 +326,7 @@ object SparkBackupManager {
 
     private fun JSONObject.toSettings() = UserSettingsEntity(
         id = optInt("id", 1), theme = optString("theme", "neon"),
-        accent = optString("accent", "violet"), reducedMotion = optBoolean("reducedMotion")
+        accent = optString("accent", "violet"), reducedMotion = optBoolean("reducedMotion"),
+        language = optString("language", "fa").takeIf { it in setOf("fa", "en", "ar") } ?: "fa"
     )
 }
