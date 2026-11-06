@@ -49,10 +49,7 @@ class ProductivityRepository internal constructor(private val dao: ProductivityD
     suspend fun createGoal(goal: GoalEntity, taskIds: Set<Long>, habitIds: Set<Long>): Long {
         require(goal.title.isNotBlank()) { "Goal title must not be blank." }
         require(goal.targetValue.isFinite() && goal.targetValue > 0.0) { "Goal target must be positive." }
-        val id = dao.insertGoal(goal)
-        taskIds.forEach { dao.linkTaskToGoal(GoalTaskLinkEntity(id, it)) }
-        habitIds.forEach { dao.linkHabitToGoal(GoalHabitLinkEntity(id, it)) }
-        return id
+        return dao.createGoalWithLinks(goal, taskIds, habitIds)
     }
 
     // Focus operations stay behind the same repository boundary.
