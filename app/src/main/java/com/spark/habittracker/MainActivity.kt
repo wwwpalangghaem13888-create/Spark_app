@@ -311,16 +311,21 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
     val background = when (settings.theme) {
         "minimal" -> Color(0xFF101820)
         "dark" -> Color(0xFF111318)
+        "light" -> Color(0xFFF3F4F8)
         else -> Color(0xFF090716)
     }
     val surface = when (settings.theme) {
         "minimal" -> Color(0xFF1B2731)
         "dark" -> Color(0xFF20232A)
+        "light" -> Color(0xFFFFFFFF)
         else -> Color(0xFF151127)
     }
-    val palette = SparkPalette(background, surface, surface.copy(alpha = 0.78f), accent, accent.copy(alpha = 0.75f), Color(0xFF72DDE0), Color(0xFFA9A0C2), Color(0xFFF8F5FF))
+    val light = settings.theme == "light"
+    val palette = SparkPalette(background, surface, surface.copy(alpha = 0.78f), accent, accent.copy(alpha = 0.75f), Color(0xFF168A95), if (light) Color(0xFF626575) else Color(0xFFA9A0C2), if (light) Color(0xFF171923) else Color(0xFFF8F5FF))
     CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(colorScheme = darkColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.Black, onBackground = palette.foreground, onSurface = palette.foreground), content = content)
+        val colors = if (light) lightColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.White, onBackground = palette.foreground, onSurface = palette.foreground)
+            else darkColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.Black, onBackground = palette.foreground, onSurface = palette.foreground)
+        MaterialTheme(colorScheme = colors, content = content)
     }
 }
 
@@ -371,11 +376,11 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
                 Text("SPARK", color = VioletLight, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text(listOf("عادت‌های روزانه", "مدیریت وظایف", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها", "اهداف", "تمرکز")[tab], color = Muted, fontSize = 12.sp)
+                Text(listOf("عادت‌های روزانه", "مدیریت وظایف", "مرور روزها", "گزارش عملکرد", "سطح و دستاوردها", "اهداف", "تمرکز", "پشتیبان‌گیری")[tab], color = Muted, fontSize = 12.sp)
             }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
-            listOf("خانه" to Icons.Default.Home, "وظایف" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents, "اهداف" to Icons.Default.Flag, "تمرکز" to Icons.Default.Timer).forEachIndexed { i, item ->
+            listOf("خانه" to Icons.Default.Home, "وظایف" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents, "اهداف" to Icons.Default.Flag, "تمرکز" to Icons.Default.Timer, "پشتیبان" to Icons.Default.Folder).forEachIndexed { i, item ->
                 NavigationBarItem(selected = tab == i, onClick = { tab = i; if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
@@ -420,7 +425,8 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                 3 -> Statistics(habits, allLogs)
                 4 -> ProgressHub(todayHabits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
                 5 -> GoalsScreen(db.productivityDao(), tasks)
-                else -> FocusScreen(db.productivityDao())
+                6 -> FocusScreen(db.productivityDao())
+                else -> BackupScreen(db)
             }
         }
     }
@@ -711,7 +717,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                 Text("ظاهر برنامه", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Text("تم", color = Muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    listOf("neon" to "نئون", "dark" to "تیره", "minimal" to "مینیمال").forEach { (key, label) ->
+                    listOf("neon" to "نئون", "dark" to "تیره", "minimal" to "مینیمال", "light" to "روشن").forEach { (key, label) ->
                         FilterChip(selected = settings.theme == key, onClick = { onSettingsChange(settings.copy(theme = key)) }, label = { Text(label) })
                     }
                 }
