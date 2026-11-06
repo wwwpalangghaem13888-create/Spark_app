@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [main, master, spark-5.0, feature/architecture-scalability]
+    branches: [main, master, spark-5.0]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -45,6 +45,10 @@ jobs:
           profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
+          emulator-boot-timeout: 900
+          cores: 2
+          ram-size: 4096
+          heap-size: 512
           script: |
             gradle connectedDebugAndroidTest --stacktrace --info || {
               mkdir -p app/build/outputs
