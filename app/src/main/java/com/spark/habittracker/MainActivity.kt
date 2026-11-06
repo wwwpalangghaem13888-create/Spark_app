@@ -89,6 +89,7 @@ interface HabitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreHabits(items: List<HabitEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreLogs(items: List<HabitLogEntity>)
     @Query("SELECT * FROM user_settings WHERE id = 1") fun observeSettings(): Flow<UserSettingsEntity?>
+    @Query("SELECT * FROM user_settings WHERE id = 1") suspend fun getSettings(): UserSettingsEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveSettings(settings: UserSettingsEntity)
     @Insert suspend fun insertHabit(habit: HabitEntity): Long
     @Update suspend fun updateHabit(habit: HabitEntity)
