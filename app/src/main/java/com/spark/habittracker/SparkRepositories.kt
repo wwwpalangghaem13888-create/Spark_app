@@ -11,6 +11,8 @@ class HabitRepository internal constructor(private val dao: HabitDao) {
     fun observeHabits(): Flow<List<HabitEntity>> = dao.observeHabits()
     fun observeLogs(date: LocalDate): Flow<List<HabitLogEntity>> = dao.observeLogs(date.toString())
     fun observeAllLogs(): Flow<List<HabitLogEntity>> = dao.observeAllLogs()
+    fun observeSettings(): Flow<UserSettingsEntity?> = dao.observeSettings()
+    suspend fun saveSettings(settings: UserSettingsEntity) = dao.saveSettings(settings)
     suspend fun save(habit: HabitEntity): Long {
         require(habit.title.isNotBlank()) { "Habit title must not be blank." }
         require(habit.scheduledDays.split(",").any { it.isNotBlank() }) { "At least one scheduled day is required." }
