@@ -47,7 +47,8 @@ class SparkDatabaseMigrationTest {
             assertEquals(1, db.productivityDao().getAllGoalTaskLinks().size)
             assertEquals(1, db.productivityDao().getAllGoalHabitLinks().size)
             assertEquals(1, db.productivityDao().getAllFocusSessions().size)
-            assertEquals(3, db.productivityDao().getAllReminders().size)
+            assertEquals(4, db.productivityDao().getAllReminders().size)
+            assertFalse(db.productivityDao().getAllReminders().single { it.id == 73L }.enabled)
 
             val migratedSession = db.productivityDao().getAllFocusSessions().single()
             assertEquals(20L, migratedSession.linkedTaskId)
@@ -66,7 +67,8 @@ class SparkDatabaseMigrationTest {
             assertTrue(db.productivityDao().getAllTaskHistory().isEmpty())
             assertTrue(db.productivityDao().getAllGoalTaskLinks().isEmpty())
             assertNull(db.productivityDao().getAllFocusSessions().single().linkedTaskId)
-            assertTrue(db.productivityDao().getAllReminders().none { it.ownerType == "TASK" })
+            assertTrue(db.productivityDao().getAllReminders().none { it.ownerType == "TASK" && it.ownerId == 20L })
+            assertTrue(db.productivityDao().getAllReminders().any { it.id == 73L && !it.enabled })
 
             // Habit deletion is one transaction and cascades logs, goal links and reminders.
             assertEquals(1, db.habitDao().deleteHabitAndDependents(10L))
@@ -194,6 +196,7 @@ class SparkDatabaseMigrationTest {
             legacy.execSQL("INSERT INTO reminders VALUES (70, 'TASK', 20, 2000, 1, NULL, 1000)")
             legacy.execSQL("INSERT INTO reminders VALUES (71, 'HABIT', 10, 2000, 1, NULL, 1000)")
             legacy.execSQL("INSERT INTO reminders VALUES (72, 'FOCUS', 60, 2000, 1, NULL, 1000)")
+            legacy.execSQL("INSERT INTO reminders VALUES (73, 'TASK', 999, 2000, 1, NULL, 1000)")
             legacy.execSQL("PRAGMA user_version = 6")
         } finally {
             legacy.close()
