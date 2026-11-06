@@ -738,15 +738,19 @@ private fun Statistics(
             }
         }
         item {
-            val dailyTaskRates = report.days.takeLast(14).map { day ->
+            val dailyTaskRates = report.days.mapNotNull { day ->
                 val due = tasks.count { it.dueDate == day.date.toString() }
-                if (due == 0) 0f else (day.completedTasks.toFloat() / due).coerceIn(0f, 1f)
+                if (due == 0) null else (day.completedTasks.toFloat() / due).coerceIn(0f, 1f)
             }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("درصد انجام کارها", color = White, fontWeight = FontWeight.Bold)
                 Text("بر اساس کارهایی که تاریخ انجامشان در بازهٔ انتخابی است", color = Muted, fontSize = 10.sp)
-                SparkLineChart(dailyTaskRates, Modifier.fillMaxWidth().height(150.dp))
+                if (dailyTaskRates.isEmpty()) {
+                    Text(localizedText(language, "در این بازه کار تاریخ‌داری ثبت نشده است.", "No dated tasks were scheduled in this period.", "لا توجد مهام مؤرخة في هذه الفترة."), color = Muted, fontSize = 11.sp)
+                } else {
+                    SparkLineChart(dailyTaskRates, Modifier.fillMaxWidth().height(150.dp))
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(report.startDate.toString(), color = Muted, fontSize = 9.sp)
                     Text(report.endDate.toString(), color = Muted, fontSize = 9.sp)
@@ -754,8 +758,20 @@ private fun Statistics(
             }
         }
         item {
-            val completedNow = tasks.count { it.completed }
-            val openNow = tasks.count { !it.completed && !it.archived }
+            val completedNow = tasks.count { task ->
+                if (!task.completed) false else {
+                    val activityDate = task.completedAt?.let {
+                        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                    } ?: task.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    activityDate != null && activityDate >= report.startDate && activityDate <= report.endDate
+                }
+            }
+            val openNow = tasks.count { task ->
+                if (task.completed || task.archived) false else {
+                    val due = task.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    due != null && due >= report.startDate && due <= report.endDate
+                }
+            }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("کارهای انجام‌شده و باقی‌مانده", color = White, fontWeight = FontWeight.Bold)
