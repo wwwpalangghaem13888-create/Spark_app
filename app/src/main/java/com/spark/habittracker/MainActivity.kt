@@ -92,11 +92,15 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> Unit) {
-    val accent = when (settings.accent) {
+    val accent = when (settings.accent.lowercase(Locale.ROOT)) {
         "cyan" -> Color(0xFF42DCE8)
         "lime" -> Color(0xFFC5F36A)
         "pink" -> Color(0xFFFF75C8)
-        else -> Color(0xFF9A63FF)
+        else -> runCatching {
+            if (settings.accent.matches(Regex("^#[0-9A-Fa-f]{6}$"))) {
+                Color(android.graphics.Color.parseColor(settings.accent))
+            } else Color(0xFF9A63FF)
+        }.getOrDefault(Color(0xFF9A63FF))
     }
     val background = when (settings.theme) {
         "dark" -> Color(0xFF020304)
@@ -720,6 +724,24 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                         FilterChip(selected = settings.accent == key, onClick = { onSettingsChange(settings.copy(accent = key)) }, label = { Text(label) })
                     }
                 }
+                var customAccentHex by remember(settings.accent) {
+                    mutableStateOf(settings.accent.takeIf { it.matches(Regex("^#[0-9A-Fa-f]{6}$")) }.orEmpty())
+                }
+                OutlinedTextField(
+                    value = customAccentHex,
+                    onValueChange = { value ->
+                        val normalized = value.trim().uppercase(Locale.ROOT)
+                        customAccentHex = normalized
+                        if (normalized.matches(Regex("^#[0-9A-F]{6}$"))) {
+                            onSettingsChange(settings.copy(accent = normalized))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("رنگ دلخواه (HEX)") },
+                    placeholder = { Text("#7C4DFF") },
+                    supportingText = { Text("کد رنگ شش‌رقمی وارد کن؛ مثل #00BFFF") },
+                    singleLine = true
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("کاهش انیمیشن‌ها", color = White)

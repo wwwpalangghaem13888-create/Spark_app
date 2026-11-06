@@ -109,12 +109,12 @@ object SparkBackupManager {
             val days = rawDays.filter(String::isNotEmpty)
             days.isNotEmpty() && days.size == rawDays.size && days.distinct().size == days.size &&
                 days.all { it in allowedDays } &&
-                habit.reminderTime.isBlank() || runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess
+                (habit.reminderTime.isBlank() || runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess)
         }) { "Habit schedule or reminder time is invalid." }
         require(settings == null || (
             settings.id == 1 &&
                 settings.theme in setOf("neon", "dark", "midnight", "neon-blue", "neon-green", "neon-pink", "neon-red", "minimal", "light") &&
-                settings.accent in setOf("violet", "cyan", "lime", "pink")
+                (settings.accent in setOf("violet", "cyan", "lime", "pink") || settings.accent.matches(Regex("^#[0-9A-Fa-f]{6}$")) )
         )) { "Appearance settings are invalid." }
 
         // Room's REPLACE strategy would overwrite an unrelated row with a colliding ID.
