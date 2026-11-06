@@ -49,14 +49,7 @@ jobs:
           cores: 2
           ram-size: 4096
           heap-size: 512
-          script: |
-            set +e
-            mkdir -p app/build/outputs
-            adb logcat -c || true
-            trap 'adb logcat -d -v threadtime > app/build/outputs/androidTest-logcat.txt 2>&1 || true' EXIT
-            gradle connectedDebugAndroidTest --stacktrace --info
-            test_status=$?
-            exit "$test_status"
+          script: bash .github/scripts/run-instrumentation-tests.sh
 
       - name: Upload instrumentation diagnostics
         if: always()
