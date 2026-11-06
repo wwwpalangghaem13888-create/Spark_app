@@ -136,7 +136,7 @@ abstract class SparkDatabase : RoomDatabase() {
                 // is not hidden by a migration-time timestamp.
                 db.execSQL("""UPDATE habits
                     SET createdAt = COALESCE(
-                        (SELECT MIN(CAST(strftime('%s', date) AS INTEGER) * 1000) FROM habit_logs WHERE habitId = habits.id),
+                        (SELECT MIN(CAST(strftime('%s', date) AS INTEGER) * 1000) FROM habit_logs WHERE habitId = habits.id AND date < date(habits.createdAt / 1000, 'unixepoch')),
                         createdAt
                     )""")
                 db.execSQL("""CREATE TABLE tasks (
