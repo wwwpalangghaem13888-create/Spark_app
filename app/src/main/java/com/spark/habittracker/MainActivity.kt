@@ -122,7 +122,6 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val dao = db.habitDao()
     val habitRepository = container.habitRepository
     val productivityRepository = container.productivityRepository
-    val taskRepository = remember(container) { container.taskRepository }
     var destination by remember { mutableStateOf(SparkDestination.Dashboard) }
     val tab = destination.tabIndex
     var date by remember { mutableStateOf(LocalDate.now()) }
@@ -272,7 +271,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                 reminderTime = reminderTime,
                 isEnabled = editing?.isEnabled ?: true
             )
-            val habitId = if (editing == null) dao.insertHabit(habit) else { dao.updateHabit(habit); habit.id }
+            val habitId = habitRepository.save(habit)
             db.productivityDao().deleteRemindersForOwner("HABIT", habitId)
             nextHabitReminder(habit, System.currentTimeMillis())?.let { triggerAt ->
                 val reminder = ReminderEntity(ownerType = "HABIT", ownerId = habitId, triggerAt = triggerAt)
@@ -287,16 +286,18 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
         onDismiss = { taskEditorOpen = false; editingTask = null },
         onSave = { task ->
             scope.launch {
-                val taskId = taskRepository.save(task)
-                db.productivityDao().deleteRemindersForOwner("TASK", taskId)
-                taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
-                    val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
-                    val reminderId = db.productivityDao().insertReminder(reminder)
-                    ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                val taskId = viewModel.saveTask(task)
+                if (taskId != null) {
+                    db.productivityDao().deleteRemindersForOwner("TASK", taskId)
+                    taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
+                        val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
+                        val reminderId = db.productivityDao().insertReminder(reminder)
+                        ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                    }
+                    SparkWidgetProvider.refreshAll(context)
+                    taskEditorOpen = false
+                    editingTask = null
                 }
-                SparkWidgetProvider.refreshAll(context)
-                taskEditorOpen = false
-                editingTask = null
             }
         }
     )
