@@ -316,6 +316,11 @@ internal fun focusRemainingSeconds(session: FocusSessionEntity, nowMillis: Long)
     return (session.plannedDurationSeconds - elapsed.coerceAtLeast(0) / 1000).coerceAtLeast(0)
 }
 
+internal fun focusElapsedSeconds(session: FocusSessionEntity, nowMillis: Long): Long {
+    val end = session.pausedAt ?: nowMillis
+    return ((end - session.startedAt - session.accumulatedPausedSeconds * 1000).coerceAtLeast(0) / 1000)
+}
+
 internal fun goalProgressRatio(completedActivities: Int, targetValue: Double): Float {
     if (!targetValue.isFinite() || targetValue <= 0.0) return 0f
     return (completedActivities.coerceAtLeast(0) / targetValue).toFloat().coerceIn(0f, 1f)
