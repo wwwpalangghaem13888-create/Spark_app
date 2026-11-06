@@ -41,20 +41,24 @@ class SparkViewModel(
         }
     }
 
-    fun archive(taskId: Long) = mutate { tasksRepository.archive(taskId) }
-    fun deletePermanently(taskId: Long) = mutate { tasksRepository.deletePermanently(taskId) }
-    fun duplicate(task: TaskEntity) = mutate { tasksRepository.duplicate(task) }
-    fun restore(taskId: Long) = mutate { tasksRepository.restore(taskId) }
+    suspend fun archive(taskId: Long) = mutate { tasksRepository.archive(taskId) }
+    suspend fun deletePermanently(taskId: Long) = mutate { tasksRepository.deletePermanently(taskId) }
+    suspend fun duplicate(task: TaskEntity) = mutate { tasksRepository.duplicate(task) }
+    suspend fun restore(taskId: Long) = mutate { tasksRepository.restore(taskId) }
 
-    private fun mutate(block: suspend () -> Unit) {
-        viewModelScope.launch {
-            runCatching { block() }.onFailure { error ->
-                _errors.emit(
-                    if (error is IllegalArgumentException) SparkError.Validation
-                    else if (error is SecurityException) SparkError.Permission
-                    else SparkError.Storage
-                )
-            }
+    private suspend fun mutate(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (error: Throwable) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            _errors.emit(
+                when (error) {
+                    is IllegalArgumentException -> SparkError.Validation
+                    is SecurityException -> SparkError.Permission
+                    is android.database.SQLException -> SparkError.Storage
+                    else -> SparkError.Unexpected
+                }
+            )
         }
     }
 
