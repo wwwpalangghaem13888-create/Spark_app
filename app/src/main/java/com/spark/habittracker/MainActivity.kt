@@ -986,12 +986,20 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
     }
 }
 
+private fun tintNumberPickerText(picker: NumberPicker, color: Int) {
+    for (index in 0 until picker.childCount) {
+        (picker.getChildAt(index) as? TextView)?.setTextColor(color)
+    }
+}
+
 @Composable
 private fun HabitEditor(
     initial: HabitEntity?,
     dismiss: () -> Unit,
     save: (String, String, String, String, String) -> Unit
 ) {
+    val wheelTextColor = White.toArgb()
+    val useLightWheelTheme = wheelTextColor == Color(0xFF171923).toArgb()
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
@@ -1131,26 +1139,33 @@ private fun HabitEditor(
                     AndroidView(
                         modifier = Modifier.fillMaxWidth().height(150.dp),
                         factory = { context ->
-                            LinearLayout(context).apply {
+                            val wheelContext = ContextThemeWrapper(
+                                context,
+                                if (useLightWheelTheme) android.R.style.Theme_Material_Light
+                                else android.R.style.Theme_Material
+                            )
+                            LinearLayout(wheelContext).apply {
                                 orientation = LinearLayout.HORIZONTAL
                                 gravity = Gravity.CENTER
                                 addView(
-                                    NumberPicker(context).apply {
+                                    NumberPicker(wheelContext).apply {
                                         minValue = 0
                                         maxValue = 23
                                         wrapSelectorWheel = true
                                         setFormatter { value -> String.format(Locale.ROOT, "%02d", value) }
                                         setOnValueChangedListener { _, _, newValue -> draftHour = newValue }
+                                        post { tintNumberPickerText(this, wheelTextColor) }
                                     },
                                     LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
                                 )
                                 addView(
-                                    NumberPicker(context).apply {
+                                    NumberPicker(wheelContext).apply {
                                         minValue = 0
                                         maxValue = 59
                                         wrapSelectorWheel = true
                                         setFormatter { value -> String.format(Locale.ROOT, "%02d", value) }
                                         setOnValueChangedListener { _, _, newValue -> draftMinute = newValue }
+                                        post { tintNumberPickerText(this, wheelTextColor) }
                                     },
                                     LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
                                 )
@@ -1159,6 +1174,8 @@ private fun HabitEditor(
                         update = { wheels ->
                             val hourWheel = wheels.getChildAt(0) as NumberPicker
                             val minuteWheel = wheels.getChildAt(1) as NumberPicker
+                            tintNumberPickerText(hourWheel, wheelTextColor)
+                            tintNumberPickerText(minuteWheel, wheelTextColor)
                             if (hourWheel.value != draftHour) hourWheel.value = draftHour
                             if (minuteWheel.value != draftMinute) minuteWheel.value = draftMinute
                         }
