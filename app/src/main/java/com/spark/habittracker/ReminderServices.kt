@@ -12,7 +12,6 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -106,9 +105,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val db = Room.databaseBuilder(context.applicationContext, SparkDatabase::class.java, "spark_tracker.db")
-                    .addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3,
-                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build()
+                val db = SparkDatabaseFactory.create(context)
                 try {
                     val dao = db.productivityDao()
                     if (intent.action == ReminderScheduler.ACTION_SNOOZE) {
@@ -176,9 +173,7 @@ class SparkBootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val db = Room.databaseBuilder(context.applicationContext, SparkDatabase::class.java, "spark_tracker.db")
-                    .addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3,
-                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build()
+                val db = SparkDatabaseFactory.create(context)
                 try {
                     db.productivityDao().getEnabledReminders()
                         .forEach { ReminderScheduler.schedule(context, it) }
