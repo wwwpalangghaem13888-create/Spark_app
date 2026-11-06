@@ -120,7 +120,7 @@ interface ProductivityDao {
     @Query("SELECT * FROM task_subtasks")
     suspend fun getAllSubtasks(): List<TaskSubtaskEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreSubtasks(items: List<TaskSubtaskEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -141,7 +141,7 @@ interface ProductivityDao {
     @Query("SELECT * FROM task_completion_history")
     suspend fun getAllTaskHistory(): List<TaskCompletionEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreTaskHistory(items: List<TaskCompletionEntity>)
 
     @Query("SELECT * FROM tasks WHERE id = :taskId LIMIT 1")
@@ -162,7 +162,7 @@ interface ProductivityDao {
     @Query("SELECT * FROM goals")
     suspend fun getAllGoals(): List<GoalEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreGoals(items: List<GoalEntity>)
 
     @Query("SELECT * FROM goal_task_links")
@@ -171,10 +171,10 @@ interface ProductivityDao {
     @Query("SELECT * FROM goal_habit_links")
     suspend fun getAllGoalHabitLinks(): List<GoalHabitLinkEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreGoalTaskLinks(items: List<GoalTaskLinkEntity>)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreGoalHabitLinks(items: List<GoalHabitLinkEntity>)
 
     @Query("SELECT * FROM focus_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
@@ -230,7 +230,7 @@ interface ProductivityDao {
     @Query("SELECT * FROM focus_sessions")
     suspend fun getAllFocusSessions(): List<FocusSessionEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreFocusSessions(items: List<FocusSessionEntity>)
 
     @Query("UPDATE focus_sessions SET pausedAt = :pausedAt, accumulatedPausedSeconds = :accumulatedPausedSeconds WHERE id = :id")
@@ -254,7 +254,7 @@ interface ProductivityDao {
     @Query("SELECT * FROM reminders")
     suspend fun getAllReminders(): List<ReminderEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreReminders(items: List<ReminderEntity>)
 
     @Query("SELECT * FROM reminders WHERE enabled = 1 AND triggerAt <= :now AND (snoozedUntil IS NULL OR snoozedUntil <= :now) ORDER BY triggerAt")

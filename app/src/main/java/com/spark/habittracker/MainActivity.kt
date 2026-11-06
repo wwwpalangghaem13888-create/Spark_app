@@ -87,8 +87,8 @@ interface HabitDao {
     @Query("SELECT * FROM habit_logs") fun observeAllLogs(): Flow<List<HabitLogEntity>>
     @Query("SELECT * FROM habits") suspend fun getAllHabits(): List<HabitEntity>
     @Query("SELECT * FROM habit_logs") suspend fun getAllLogs(): List<HabitLogEntity>
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreHabits(items: List<HabitEntity>)
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun restoreLogs(items: List<HabitLogEntity>)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun restoreHabits(items: List<HabitEntity>)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun restoreLogs(items: List<HabitLogEntity>)
     @Query("SELECT * FROM user_settings WHERE id = 1") fun observeSettings(): Flow<UserSettingsEntity?>
     @Query("SELECT * FROM user_settings WHERE id = 1") suspend fun getSettings(): UserSettingsEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveSettings(settings: UserSettingsEntity)

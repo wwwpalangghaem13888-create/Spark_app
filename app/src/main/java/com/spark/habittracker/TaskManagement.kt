@@ -86,7 +86,7 @@ interface TaskDao {
     @Query("SELECT * FROM tasks")
     suspend fun getAllTasks(): List<TaskEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun restoreTasks(items: List<TaskEntity>)
 }
 

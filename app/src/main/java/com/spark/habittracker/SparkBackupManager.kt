@@ -116,24 +116,28 @@ object SparkBackupManager {
 
         // Room's REPLACE strategy would overwrite an unrelated row with a colliding ID.
         // Accept exact repeats (making restore idempotent), but reject conflicting rows.
-        val existingHabits = db.habitDao().getAllHabits()
-        val existingLogs = db.habitDao().getAllLogs()
-        val existingTasks = db.taskDao().getAllTasks()
-        val productivity = db.productivityDao()
-        ensureNoIdConflicts("habit", habits, existingHabits) { it.id }
-        ensureNoIdConflicts("habit log", logs, existingLogs) { it.id }
-        ensureNoIdConflicts("task", tasks, existingTasks) { it.id }
-        ensureNoIdConflicts("subtask", subtasks, productivity.getAllSubtasks()) { it.id }
-        ensureNoIdConflicts("task history", history, productivity.getAllTaskHistory()) { it.id }
-        ensureNoIdConflicts("goal", goals, productivity.getAllGoals()) { it.id }
-        ensureNoIdConflicts("focus session", sessions, productivity.getAllFocusSessions()) { it.id }
-        ensureNoIdConflicts("reminder", reminders, productivity.getAllReminders()) { it.id }
-        ensureNoHabitLogConflicts(logs, existingLogs)
-
         db.withTransaction {
-            db.habitDao().restoreHabits(habits)
-            db.habitDao().restoreLogs(logs)
-            db.taskDao().restoreTasks(tasks)
+            val habitDao = db.habitDao()
+            val taskDao = db.taskDao()
+            val productivity = db.productivityDao()
+            val existingHabits = habitDao.getAllHabits()
+            val existingLogs = habitDao.getAllLogs()
+            val existingTasks = taskDao.getAllTasks()
+            ensureNoIdConflicts("habit", habits, existingHabits) { it.id }
+            ensureNoIdConflicts("habit log", logs, existingLogs) { it.id }
+            ensureNoIdConflicts("task", tasks, existingTasks) { it.id }
+            ensureNoIdConflicts("subtask", subtasks, productivity.getAllSubtasks()) { it.id }
+            ensureNoIdConflicts("task history", history, productivity.getAllTaskHistory()) { it.id }
+            ensureNoIdConflicts("goal", goals, productivity.getAllGoals()) { it.id }
+            ensureNoIdConflicts("focus session", sessions, productivity.getAllFocusSessions()) { it.id }
+            ensureNoIdConflicts("reminder", reminders, productivity.getAllReminders()) { it.id }
+            ensureNoHabitLogConflicts(logs, existingLogs)
+
+            // IGNORE avoids SQLite REPLACE's delete-then-insert behavior and
+            // therefore preserves existing dependent rows under foreign keys.
+            habitDao.restoreHabits(habits)
+            habitDao.restoreLogs(logs)
+            taskDao.restoreTasks(tasks)
             productivity.restoreSubtasks(subtasks)
             productivity.restoreTaskHistory(history)
             productivity.restoreGoals(goals)
@@ -141,7 +145,7 @@ object SparkBackupManager {
             productivity.restoreGoalHabitLinks(habitLinks)
             productivity.restoreFocusSessions(sessions)
             productivity.restoreReminders(reminders)
-            settings?.let { db.habitDao().saveSettings(it) }
+            settings?.let { habitDao.saveSettings(it) }
         }
         return habits.size + logs.size + tasks.size + subtasks.size + history.size +
             goals.size + taskLinks.size + habitLinks.size + sessions.size + reminders.size +
