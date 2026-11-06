@@ -39,7 +39,6 @@ class ProductivityRepository internal constructor(private val dao: ProductivityD
         dao.recordTaskCompletion(taskId, completed, now, date.toString())
 
     // Goal operations are exposed through this boundary; Compose never receives a Room DAO.
-    fun observeGoals(): Flow<List<GoalEntity>> = dao.observeGoals()
     suspend fun linkedTaskIds(goalId: Long): List<Long> = dao.linkedTaskIds(goalId)
     suspend fun linkedHabitIds(goalId: Long): List<Long> = dao.linkedHabitIds(goalId)
     suspend fun completedLinkedTasks(goalId: Long, startDate: String, endDate: String, startMillis: Long, endMillis: Long): Int =
@@ -57,7 +56,6 @@ class ProductivityRepository internal constructor(private val dao: ProductivityD
     }
 
     // Focus operations stay behind the same repository boundary.
-    fun observeActiveFocusSession(): Flow<FocusSessionEntity?> = dao.observeActiveFocusSession()
     suspend fun finishFocusSession(id: Long, actualSeconds: Long, completed: Boolean, endedAt: Long): Int =
         dao.finishFocusSession(id, actualSeconds, completed, endedAt)
     suspend fun disableRemindersForOwner(ownerType: String, ownerId: Long): Int =
