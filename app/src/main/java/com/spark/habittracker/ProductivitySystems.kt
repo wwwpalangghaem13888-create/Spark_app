@@ -231,6 +231,9 @@ interface ProductivityDao {
     @Query("DELETE FROM reminders WHERE ownerType = :ownerType AND ownerId = :ownerId")
     suspend fun deleteRemindersForOwner(ownerType: String, ownerId: Long): Int
 
+    @Query("UPDATE reminders SET enabled = 0 WHERE ownerType = :ownerType AND ownerId = :ownerId")
+    suspend fun disableRemindersForOwner(ownerType: String, ownerId: Long): Int
+
     @Query("SELECT * FROM reminders WHERE enabled = 1")
     suspend fun getEnabledReminders(): List<ReminderEntity>
 
@@ -259,6 +262,7 @@ interface ProductivityDao {
         val changed = setTaskCompletion(taskId, completed, if (completed) atMillis else null, atMillis)
         if (changed == 0) return false
         insertTaskHistory(TaskCompletionEntity(taskId = taskId, completed = completed, activityDate = date, completedAt = atMillis))
+        if (completed) disableRemindersForOwner("TASK", taskId)
         if (completed && task.recurrenceRule != null && task.dueDate != null) {
             val rootId = task.recurrenceParentId ?: task.id
             val nextDate = runCatching { nextRecurringDate(task.recurrenceRule, LocalDate.parse(task.dueDate)) }.getOrNull()
