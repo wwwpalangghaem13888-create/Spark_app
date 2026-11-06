@@ -24,6 +24,7 @@ object SparkBackupManager {
             val result = JSONObject()
                 .put("format", "spark-backup")
                 .put("version", FORMAT_VERSION)
+                .put("databaseVersion", SparkDatabase.VERSION)
                 .put("exportedAt", System.currentTimeMillis())
                 .put("habits", JSONArray().apply { habits.forEach { put(it.toJson()) } })
                 .put("habitLogs", JSONArray().apply { logs.forEach { put(it.toJson()) } })
