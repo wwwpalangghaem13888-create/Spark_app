@@ -391,7 +391,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion,
+                0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, focusSessions,
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
                     onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch { db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) } } })
@@ -468,7 +468,14 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
 }
 
 @Composable
-private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, streaks: Map<Long, Int>, reducedMotion: Boolean, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Float, streaks: Map<Long, Int>, reducedMotion: Boolean, tasks: List<TaskEntity>, focusSessions: List<FocusSessionEntity>, onToggle: (HabitEntity, Boolean) -> Unit, onEdit: (HabitEntity) -> Unit, onDelete: (HabitEntity) -> Unit) {
+    val today = LocalDate.now()
+    val tasksDueToday = tasks.filter { it.dueDate == today.toString() }
+    val completedTasksToday = tasks.count { task ->
+        task.completed && task.completedAt?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() == today } == true
+    }
+    val focusMinutesToday = focusSessions.filter { Instant.ofEpochMilli(it.startedAt).atZone(ZoneId.systemDefault()).toLocalDate() == today }
+        .sumOf { it.actualDurationSeconds.coerceAtLeast(0) } / 60
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
         animationSpec = tween(durationMillis = if (reducedMotion) 0 else 1100, easing = FastOutSlowInEasing),
@@ -511,6 +518,22 @@ private fun Dashboard(habits: List<HabitEntity>, done: Set<Long>, progress: Floa
             Metric("انجام‌شده", completedCount.toString(), Modifier.weight(1f))
             Metric("باقی‌مانده", (habits.size - completedCount).coerceAtLeast(0).toString(), Modifier.weight(1f))
         } }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Metric("وظایف امروز", tasksDueToday.size.toString(), Modifier.weight(1f))
+                Metric("تکمیل امروز", completedTasksToday.toString(), Modifier.weight(1f))
+                Metric("تمرکز", focusMinutesToday.toString() + " دقیقه", Modifier.weight(1f))
+            }
+        }
+        item { Text("وظایف نزدیک", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        if (tasksDueToday.isEmpty()) item { Text("برای امروز وظیفهٔ زمان‌بندی‌شده‌ای وجود ندارد.", color = Muted, fontSize = 12.sp) }
+        else items(tasksDueToday.take(3), key = { "task-" + it.id }) { task ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (task.completed) Icons.Default.CheckCircle else Icons.Default.Circle, null, tint = if (task.completed) Cyan else Muted)
+                Text(task.title, color = White, modifier = Modifier.weight(1f).padding(start = 10.dp))
+                Text(if (task.completed) "انجام شد" else taskPriorityLabel(task.priority), color = Muted, fontSize = 10.sp)
+            }
+        }
         item { Text("فهرست امروز", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         if (habits.isEmpty()) item { EmptyState() } else items(habits, key = { it.id }) { h -> HabitCard(h, h.id in done, streaks[h.id] ?: 0, { onToggle(h, h.id in done) }, { onEdit(h) }, { onDelete(h) }) }
     }
