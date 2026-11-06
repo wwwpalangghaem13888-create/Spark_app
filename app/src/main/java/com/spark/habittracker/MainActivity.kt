@@ -209,18 +209,20 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                     } },
                     onEdit = { editingTask = it; taskEditorOpen = true },
                     onArchive = { task -> scope.launch {
-                        viewModel.archive(task.id)
-                        db.productivityDao().disableRemindersForOwner("TASK", task.id)
-                        SparkWidgetProvider.refreshAll(context)
+                        if (viewModel.archive(task.id)) {
+                            db.productivityDao().disableRemindersForOwner("TASK", task.id)
+                            SparkWidgetProvider.refreshAll(context)
+                        }
                     } },
                     onDelete = { task -> scope.launch {
-                        db.productivityDao().deleteRemindersForOwner("TASK", task.id)
-                        viewModel.deletePermanently(task.id)
-                        SparkWidgetProvider.refreshAll(context)
+                        if (viewModel.deletePermanently(task.id)) {
+                            db.productivityDao().deleteRemindersForOwner("TASK", task.id)
+                            SparkWidgetProvider.refreshAll(context)
+                        }
                     } },
-                    onDuplicate = { task -> scope.launch { viewModel.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
+                    onDuplicate = { task -> scope.launch { if (viewModel.duplicate(task)) SparkWidgetProvider.refreshAll(context) } },
                     onRestore = { task -> scope.launch {
-                        viewModel.restore(task.id)
+                        if (viewModel.restore(task.id)) {
                         taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
                             db.productivityDao().deleteRemindersForOwner("TASK", task.id)
                             val reminder = ReminderEntity(ownerType = "TASK", ownerId = task.id, triggerAt = triggerAt)
@@ -228,6 +230,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                             ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                         }
                         SparkWidgetProvider.refreshAll(context)
+                        }
                     } },
                     archivedTasks = archivedTasks,
                     productivityDao = db.productivityDao()
