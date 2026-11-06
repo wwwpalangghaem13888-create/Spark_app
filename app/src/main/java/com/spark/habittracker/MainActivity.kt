@@ -1,7 +1,4 @@
 package com.spark.habittracker
-import android.app.Activity
-import android.content.Context
-import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Build
 import android.content.pm.PackageManager
@@ -81,13 +78,7 @@ data class HabitEntity(
 data class HabitLogEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val habitId: Long, val date: String, val isCompleted: Boolean, val completionTimestamp: Long = System.currentTimeMillis())
 
 @Entity(tableName = "user_settings")
-data class UserSettingsEntity(
-    @PrimaryKey val id: Int = 1,
-    val theme: String = "neon",
-    val accent: String = "violet",
-    val reducedMotion: Boolean = false,
-    @ColumnInfo(defaultValue = "'fa'") val language: String = "fa"
-)
+data class UserSettingsEntity(@PrimaryKey val id: Int = 1, val theme: String = "neon", val accent: String = "violet", val reducedMotion: Boolean = false)
 
 @Dao
 interface HabitDao {
@@ -102,7 +93,6 @@ interface HabitDao {
     @Query("SELECT * FROM user_settings WHERE id = 1") fun observeSettings(): Flow<UserSettingsEntity?>
     @Query("SELECT * FROM user_settings WHERE id = 1") suspend fun getSettings(): UserSettingsEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveSettings(settings: UserSettingsEntity)
-    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun seedSettings(settings: UserSettingsEntity)
     @Insert suspend fun insertHabit(habit: HabitEntity): Long
     @Update suspend fun updateHabit(habit: HabitEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveLog(log: HabitLogEntity)
@@ -110,7 +100,7 @@ interface HabitDao {
     @Query("DELETE FROM habits WHERE id = :id") suspend fun deleteHabit(id: Long)
 }
 
-@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 7, exportSchema = false)
+@Database(entities = [HabitEntity::class, HabitLogEntity::class, UserSettingsEntity::class, TaskEntity::class, TaskSubtaskEntity::class, TaskCompletionEntity::class, GoalEntity::class, GoalTaskLinkEntity::class, GoalHabitLinkEntity::class, FocusSessionEntity::class, ReminderEntity::class], version = 6, exportSchema = false)
 abstract class SparkDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun taskDao(): TaskDao
@@ -294,29 +284,11 @@ abstract class SparkDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE tasks ADD COLUMN reminderAt INTEGER")
             }
         }
-        val MIGRATION_6_7 = object : Migration(6, 7) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE user_settings ADD COLUMN language TEXT NOT NULL DEFAULT 'fa'")
-                db.execSQL("ALTER TABLE reminders ADD COLUMN mode TEXT NOT NULL DEFAULT 'NOTIFICATION'")
-            }
-        }
     }
 }
 
 class MainActivity : ComponentActivity() {
-    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3, SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6, SparkDatabase.MIGRATION_6_7).build() }
-
-    override fun attachBaseContext(newBase: Context) {
-        val language = newBase.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
-            .getString("language", "fa")?.takeIf { it in setOf("fa", "en", "ar") } ?: "fa"
-        val locale = Locale.forLanguageTag(language)
-        val configuration = Configuration(newBase.resources.configuration).apply {
-            setLocale(locale)
-            setLayoutDirection(locale)
-        }
-        super.attachBaseContext(newBase.createConfigurationContext(configuration))
-    }
-
+    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3, SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ReminderScheduler.ensureChannel(this)
@@ -325,9 +297,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by db.habitDao().observeSettings().collectAsState(initial = null)
-            val initialLanguage = getSharedPreferences("spark_locale", MODE_PRIVATE)
-                .getString("language", "fa") ?: "fa"
-            SparkTheme(settings ?: UserSettingsEntity(language = initialLanguage)) { SparkApp(db.habitDao(), db) }
+            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(db.habitDao(), db) }
         }
     }
 }
@@ -354,8 +324,7 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
     }
     val light = settings.theme == "light"
     val palette = SparkPalette(background, surface, surface.copy(alpha = 0.78f), accent, accent.copy(alpha = 0.75f), Color(0xFF168A95), if (light) Color(0xFF626575) else Color(0xFFA9A0C2), if (light) Color(0xFF171923) else Color(0xFFF8F5FF))
-    val layoutDirection = if (settings.language == "en") LayoutDirection.Ltr else LayoutDirection.Rtl
-    CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides layoutDirection) {
+    CompositionLocalProvider(LocalSparkPalette provides palette, LocalLayoutDirection provides LayoutDirection.Rtl) {
         val colors = if (light) lightColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.White, onBackground = palette.foreground, onSurface = palette.foreground)
             else darkColorScheme(primary = accent, secondary = palette.secondary, background = background, surface = surface, onPrimary = Color.Black, onBackground = palette.foreground, onSurface = palette.foreground)
         MaterialTheme(colorScheme = colors, content = content)
@@ -383,14 +352,8 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val todayLogs by remember(currentDay) { dao.observeLogs(currentDay.toString()) }.collectAsState(initial = emptyList())
     val allLogs by dao.observeAllLogs().collectAsState(initial = emptyList())
     val savedSettings by dao.observeSettings().collectAsState(initial = null)
-    val settings = savedSettings ?: UserSettingsEntity(
-        language = context.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
-            .getString("language", "fa") ?: "fa"
-    )
+    val settings = savedSettings ?: UserSettingsEntity()
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
-    var editingReminderMode by remember { mutableStateOf("NOTIFICATION") }
-    var editingTaskReminderMode by remember { mutableStateOf("NOTIFICATION") }
     LaunchedEffect(Unit) {
         while (true) {
             val zone = ZoneId.systemDefault()
@@ -402,17 +365,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     LaunchedEffect(currentDay, tab) {
         if (tab == 0) date = currentDay
     }
-    LaunchedEffect(Unit) {
-        val preferenceLanguage = context.getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
-            .getString("language", "fa") ?: "fa"
-        val storedSettings = dao.getSettings()
-        if (storedSettings == null) {
-            dao.seedSettings(UserSettingsEntity(language = preferenceLanguage))
-        } else if (storedSettings.language != preferenceLanguage) {
-            syncLanguagePreference(context, storedSettings.language)
-            (context as? Activity)?.recreate()
-        }
-    }
+    LaunchedEffect(savedSettings) { if (savedSettings == null) dao.saveSettings(UserSettingsEntity()) }
     val done = logs.filter { it.isCompleted }.map { it.habitId }.toSet()
     val streaksByHabit = remember(habits, allLogs, currentDay) {
         habits.associate { habit ->
@@ -427,9 +380,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val todayHabits = habits.filter { it.isScheduledOn(currentDay) }
     val completedCount = done.intersect(scheduledHabits.map { it.id }.toSet()).size
     val progress = calculateCompletionRate(completedCount, scheduledHabits.size)
-    Scaffold(
-        containerColor = Ink,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+    Scaffold(containerColor = Ink,
         topBar = { TopAppBar(title = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Image(painterResource(R.drawable.spark_logo), contentDescription = "لوگوی Spark", modifier = Modifier.size(42.dp))
             Column {
@@ -445,8 +396,8 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
         } },
         floatingActionButton = { if (tab == 0 || tab == 1 || tab == 2) FloatingActionButton(onClick = {
             when (tab) {
-                1 -> { editingTask = null; editingTaskReminderMode = "NOTIFICATION"; taskEditorOpen = true }
-                2 -> { editingTask = TaskEntity(title = "", dueDate = date.toString()); editingTaskReminderMode = "NOTIFICATION"; taskEditorOpen = true }
+                1 -> { editingTask = null; taskEditorOpen = true }
+                2 -> { editingTask = TaskEntity(title = "", dueDate = date.toString()); taskEditorOpen = true }
                 else -> { editing = null; editorOpen = true }
             }
         }, containerColor = Violet, contentColor = Ink) { Icon(Icons.Default.Add, if (tab == 0) "افزودن عادت" else "افزودن وظیفه") } }
@@ -455,46 +406,34 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
             when (tab) {
                 0 -> Dashboard(scheduledHabits, done, progress, streaksByHabit, settings.reducedMotion, tasks, taskHistory, focusSessions,
                     onToggle = { h, wasDone -> scope.launch { dao.saveLog(HabitLogEntity(habitId = h.id, date = date.toString(), isCompleted = !wasDone)) } },
-                    onEdit = { habit -> scope.launch {
-                        editingReminderMode = db.productivityDao()
-                            .getRemindersForOwner("HABIT", habit.id).firstOrNull()?.mode ?: "NOTIFICATION"
-                        editing = habit
-                        editorOpen = true
-                    } },
+                    onEdit = { editing = it; editorOpen = true },
                     onDelete = { h -> scope.launch {
-                        cancelAndDeleteReminders(context, db, "HABIT", h.id)
                         db.withTransaction { dao.deleteLogs(h.id); dao.deleteHabit(h.id) }
+                        db.productivityDao().deleteRemindersForOwner("HABIT", h.id)
                     } })
                 1 -> TaskListScreen(
                     tasks = tasks,
                     onToggle = { task, completed -> scope.launch {
                         recordTaskCompletionAndSyncReminder(context, db, task.id, completed)
                     } },
-                    onEdit = { task -> scope.launch {
-                        editingTaskReminderMode = db.productivityDao()
-                            .getRemindersForOwner("TASK", task.id).firstOrNull()?.mode ?: "NOTIFICATION"
-                        editingTask = task
-                        taskEditorOpen = true
-                    } },
+                    onEdit = { editingTask = it; taskEditorOpen = true },
                     onArchive = { task -> scope.launch {
-                        cancelAndDisableReminders(context, db, "TASK", task.id)
                         taskRepository.archive(task.id)
+                        db.productivityDao().disableRemindersForOwner("TASK", task.id)
                         SparkWidgetProvider.refreshAll(context)
                     } },
                     onDelete = { task -> scope.launch {
-                        cancelAndDeleteReminders(context, db, "TASK", task.id)
+                        db.productivityDao().deleteRemindersForOwner("TASK", task.id)
                         taskRepository.deletePermanently(task.id)
                         SparkWidgetProvider.refreshAll(context)
                     } },
                     onDuplicate = { task -> scope.launch { taskRepository.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
                     onRestore = { task -> scope.launch {
                         taskRepository.restore(task.id)
-                        val dao = db.productivityDao()
-                        val previousMode = dao.getRemindersForOwner("TASK", task.id).firstOrNull()?.mode ?: "NOTIFICATION"
-                        cancelAndDisableReminders(context, db, "TASK", task.id)
-                        taskReminderTriggerAt(task.copy(archived = false), System.currentTimeMillis())?.let { triggerAt ->
-                            val reminder = ReminderEntity(ownerType = "TASK", ownerId = task.id, triggerAt = triggerAt, mode = previousMode)
-                            val reminderId = dao.insertReminder(reminder)
+                        taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
+                            db.productivityDao().deleteRemindersForOwner("TASK", task.id)
+                            val reminder = ReminderEntity(ownerType = "TASK", ownerId = task.id, triggerAt = triggerAt)
+                            val reminderId = db.productivityDao().insertReminder(reminder)
                             ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                         }
                         SparkWidgetProvider.refreshAll(context)
@@ -520,103 +459,48 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     }
                 )
                 3 -> Statistics(habits, allLogs, tasks + archivedTasks, taskHistory, focusSessions)
-                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated ->
-                    scope.launch {
-                        dao.saveSettings(updated)
-                        if (updated.language != settings.language) {
-                            syncLanguagePreference(context, updated.language)
-                            (context as? Activity)?.recreate()
-                        }
-                    }
-                }
+                4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
                 5 -> GoalsScreen(db.productivityDao(), tasks, habits)
                 6 -> FocusScreen(db.productivityDao())
                 else -> BackupScreen(db)
             }
         }
     }
-    if (editorOpen) HabitEditor(
-        initial = editing,
-        initialReminderMode = editingReminderMode,
-        language = settings.language,
-        dismiss = { editorOpen = false }
-    ) { title, note, category, scheduledDays, reminderTime, reminderMode ->
+    if (editorOpen) HabitEditor(editing, { editorOpen = false }) { title, note, category, scheduledDays, reminderTime ->
         scope.launch {
-            try {
-                require(title.isNotBlank()) { "blank-title" }
-                require(scheduledDays.split(",").any { it.isNotBlank() }) { "no-scheduled-day" }
-                require(
-                    reminderTime.isBlank() || reminderMode != "ALARM" || canScheduleExactAlarm(context)
-                ) { "exact-alarm-permission" }
-                parseOptionalHabitReminderTime(reminderTime)
-                val normalizedTime = reminderTime.trim()
-                val habit = HabitEntity(
-                    id = editing?.id ?: 0, title = title.trim(), note = note.trim(),
-                    category = category.trim().ifBlank { "عمومی" },
-                    createdAt = editing?.createdAt ?: System.currentTimeMillis(),
-                    scheduledDays = scheduledDays,
-                    reminderTime = normalizedTime,
-                    isEnabled = editing?.isEnabled ?: true
-                )
-                val habitId = if (editing == null) dao.insertHabit(habit) else {
-                    dao.updateHabit(habit)
-                    habit.id
-                }
-                cancelAndDisableReminders(context, db, "HABIT", habitId)
-                nextHabitReminder(habit, System.currentTimeMillis())?.let { triggerAt ->
-                    val reminder = ReminderEntity(
-                        ownerType = "HABIT", ownerId = habitId, triggerAt = triggerAt, mode = reminderMode
-                    )
-                    val reminderId = db.productivityDao().insertReminder(reminder)
-                    ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
-                }
-                editorOpen = false
-            } catch (error: Exception) {
-                val message = when {
-                    title.isBlank() -> localizedText(settings.language, "عنوان عادت نمی‌تواند خالی باشد.", "Habit title cannot be blank.", "لا يمكن أن يكون عنوان العادة فارغًا.")
-                    scheduledDays.split(",").none { it.isNotBlank() } -> localizedText(settings.language, "حداقل یک روز را انتخاب کن.", "Select at least one scheduled day.", "اختر يومًا واحدًا على الأقل.")
-                    reminderTime.isNotBlank() && reminderMode == "ALARM" && !canScheduleExactAlarm(context) ->
-                        localizedText(settings.language, "برای زنگ واقعی، ابتدا دسترسی «هشدارها و یادآورها» را فعال کن.", "Enable exact alarms in Android settings before saving phone-alarm mode.", "فعّل إذن التنبيهات الدقيقة من إعدادات Android قبل حفظ وضع المنبّه.")
-                    reminderTime.isNotBlank() && runCatching { parseOptionalHabitReminderTime(reminderTime) }.isFailure ->
-                        localizedText(settings.language, "ساعت یادآوری معتبر نیست؛ از قالب HH:mm استفاده کن.", "Reminder time is invalid; use HH:mm.", "وقت التذكير غير صالح؛ استخدم تنسيق HH:mm.")
-                    else -> localizedText(settings.language, "ذخیره عادت انجام نشد. دوباره تلاش کن.", "The habit could not be saved. Please try again.", "تعذّر حفظ العادة.")
-                }
-                snackbarHostState.showSnackbar(message)
+            val habit = HabitEntity(
+                id = editing?.id ?: 0, title = title.trim(), note = note.trim(),
+                category = category.trim().ifBlank { "عمومی" },
+                createdAt = editing?.createdAt ?: System.currentTimeMillis(),
+                scheduledDays = scheduledDays,
+                reminderTime = reminderTime,
+                isEnabled = editing?.isEnabled ?: true
+            )
+            val habitId = if (editing == null) dao.insertHabit(habit) else { dao.updateHabit(habit); habit.id }
+            db.productivityDao().deleteRemindersForOwner("HABIT", habitId)
+            nextHabitReminder(habit, System.currentTimeMillis())?.let { triggerAt ->
+                val reminder = ReminderEntity(ownerType = "HABIT", ownerId = habitId, triggerAt = triggerAt)
+                val reminderId = db.productivityDao().insertReminder(reminder)
+                ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
             }
         }
+        editorOpen = false
     }
     if (taskEditorOpen) TaskEditorDialog(
         initial = editingTask,
-        initialReminderMode = editingTaskReminderMode,
-        language = settings.language,
         onDismiss = { taskEditorOpen = false; editingTask = null },
-        onSave = { task, reminderMode ->
+        onSave = { task ->
             scope.launch {
-                try {
-                    require(
-                        task.reminderAt == null || reminderMode != "ALARM" || canScheduleExactAlarm(context)
-                    ) { "exact-alarm-permission" }
-                    val taskId = taskRepository.save(task)
-                    cancelAndDisableReminders(context, db, "TASK", taskId)
-                    taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
-                        val reminder = ReminderEntity(
-                            ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt, mode = reminderMode
-                        )
-                        val reminderId = db.productivityDao().insertReminder(reminder)
-                        ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
-                    }
-                    SparkWidgetProvider.refreshAll(context)
-                    taskEditorOpen = false
-                    editingTask = null
-                } catch (error: Exception) {
-                    snackbarHostState.showSnackbar(
-                        if (task.reminderAt != null && reminderMode == "ALARM" && !canScheduleExactAlarm(context)) {
-                            localizedText(settings.language, "برای زنگ واقعی، ابتدا دسترسی «هشدارها و یادآورها» را فعال کن.", "Enable exact alarms in Android settings before saving phone-alarm mode.", "فعّل إذن التنبيهات الدقيقة من إعدادات Android قبل حفظ وضع المنبّه.")
-                        } else {
-                            localizedText(settings.language, "ذخیره وظیفه انجام نشد؛ عنوان، تاریخ و زمان را بررسی کن.", "Could not save the task. Check its title, date and time.", "تعذّر حفظ المهمة؛ تحقق من العنوان والتاريخ والوقت.")
-                        }
-                    )
+                val taskId = taskRepository.save(task)
+                db.productivityDao().deleteRemindersForOwner("TASK", taskId)
+                taskReminderTriggerAt(task, System.currentTimeMillis())?.let { triggerAt ->
+                    val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
+                    val reminderId = db.productivityDao().insertReminder(reminder)
+                    ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
                 }
+                SparkWidgetProvider.refreshAll(context)
+                taskEditorOpen = false
+                editingTask = null
             }
         }
     )
@@ -632,16 +516,15 @@ private suspend fun recordTaskCompletionAndSyncReminder(
     val now = System.currentTimeMillis()
     val dao = db.productivityDao()
     val changed = dao.recordTaskCompletion(taskId, completed, now, LocalDate.now().toString())
-    if (changed) {
-        val previousMode = dao.getRemindersForOwner("TASK", taskId).firstOrNull()?.mode ?: "NOTIFICATION"
-        cancelAndDisableReminders(context, db, "TASK", taskId)
-        if (!completed) {
-            val task = db.taskDao().findById(taskId)
-            task?.let { taskReminderTriggerAt(it, now) }?.let { triggerAt ->
-                val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt, mode = previousMode)
-                val reminderId = dao.insertReminder(reminder)
-                ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
-            }
+    if (changed && !completed) {
+        // A completion disables its one-shot reminder. Reopening the task must
+        // recreate the alarm if its configured reminder time is still in the future.
+        dao.deleteRemindersForOwner("TASK", taskId)
+        val task = db.taskDao().findById(taskId)
+        task?.let { taskReminderTriggerAt(it, now) }?.let { triggerAt ->
+            val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
+            val reminderId = dao.insertReminder(reminder)
+            ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
         }
     }
     SparkWidgetProvider.refreshAll(context)
@@ -975,20 +858,6 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
         item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("ظاهر برنامه", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text(localizedText(settings.language, "زبان", "Language", "اللغة"), color = Muted, fontSize = 12.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    listOf(
-                        "fa" to localizedText(settings.language, "فارسی", "Persian", "الفارسية"),
-                        "en" to localizedText(settings.language, "انگلیسی", "English", "الإنجليزية"),
-                        "ar" to localizedText(settings.language, "عربی", "Arabic", "العربية")
-                    ).forEach { (key, label) ->
-                        FilterChip(
-                            selected = settings.language == key,
-                            onClick = { onSettingsChange(settings.copy(language = key)) },
-                            label = { Text(label) }
-                        )
-                    }
-                }
                 Text("تم", color = Muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     listOf("neon" to "نئون", "dark" to "تیره", "minimal" to "مینیمال", "light" to "روشن").forEach { (key, label) ->
@@ -1016,16 +885,13 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
 @Composable
 private fun HabitEditor(
     initial: HabitEntity?,
-    initialReminderMode: String,
-    language: String,
     dismiss: () -> Unit,
-    save: (String, String, String, String, String, String) -> Unit
+    save: (String, String, String, String, String) -> Unit
 ) {
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
     var reminderTime by remember(initial) { mutableStateOf(initial?.reminderTime ?: "08:00") }
-    var reminderMode by remember(initial, initialReminderMode) { mutableStateOf(initialReminderMode) }
     val days = listOf(
         "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
         "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
@@ -1050,20 +916,15 @@ private fun HabitEditor(
                     }
                 }
             }
-            OutlinedTextField(reminderTime, { reminderTime = it; error = null }, label = { Text(localizedText(language, "ساعت یادآوری (HH:mm، خالی = بدون یادآور)", "Reminder time (HH:mm, leave blank for none)", "وقت التذكير (HH:mm، اتركه فارغًا لإلغاء التذكير)")) }, singleLine = true)
-            ReminderModeSelector(reminderMode, reminderTime.isNotBlank(), language) { reminderMode = it }
+            OutlinedTextField(reminderTime, { reminderTime = it; error = null }, label = { Text("ساعت یادآوری (HH:mm)") }, singleLine = true)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
         } },
         confirmButton = { TextButton(onClick = {
-            val validTime = reminderTime.isBlank() || runCatching { parseOptionalHabitReminderTime(reminderTime) }.isSuccess
-            if (title.isBlank()) error = localizedText(language, "عنوان نمی‌تواند خالی باشد.", "Title cannot be blank.", "لا يمكن أن يكون العنوان فارغًا.")
-            else if (selectedDays.isEmpty()) error = localizedText(language, "حداقل یک روز انتخاب کن.", "Select at least one day.", "اختر يومًا واحدًا على الأقل.")
-            else if (!validTime) error = localizedText(language, "ساعت باید با قالب HH:mm وارد شود.", "Use HH:mm for the reminder time.", "استخدم تنسيق HH:mm لوقت التذكير.")
-            else save(
-                title, note, category,
-                days.filter { it.first in selectedDays }.joinToString(",") { it.first },
-                reminderTime.trim(), reminderMode
-            )
+            val validTime = runCatching { java.time.LocalTime.parse(reminderTime) }.isSuccess
+            if (title.isBlank()) error = "عنوان نمی‌تواند خالی باشد."
+            else if (selectedDays.isEmpty()) error = "حداقل یک روز انتخاب کن."
+            else if (!validTime) error = "ساعت باید با قالب HH:mm وارد شود."
+            else save(title, note, category, days.filter { it.first in selectedDays }.joinToString(",") { it.first }, reminderTime)
         }) { Text("ذخیره", color = Violet) } },
         dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } })
 }

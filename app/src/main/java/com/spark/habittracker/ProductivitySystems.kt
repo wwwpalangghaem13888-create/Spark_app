@@ -1,6 +1,5 @@
 package com.spark.habittracker
 
-import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -109,8 +108,7 @@ data class ReminderEntity(
     val triggerAt: Long,
     val enabled: Boolean = true,
     val snoozedUntil: Long? = null,
-    val createdAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(defaultValue = "'NOTIFICATION'") val mode: String = "NOTIFICATION"
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 /** Persistence boundary for task history, subtasks, goals, focus sessions and reminders. */
@@ -263,9 +261,6 @@ interface ProductivityDao {
 
     @Query("DELETE FROM reminders WHERE ownerType = :ownerType AND ownerId = :ownerId")
     suspend fun deleteRemindersForOwner(ownerType: String, ownerId: Long): Int
-
-    @Query("SELECT * FROM reminders WHERE ownerType = :ownerType AND ownerId = :ownerId ORDER BY id DESC")
-    suspend fun getRemindersForOwner(ownerType: String, ownerId: Long): List<ReminderEntity>
 
     @Query("UPDATE reminders SET enabled = 0 WHERE ownerType = :ownerType AND ownerId = :ownerId")
     suspend fun disableRemindersForOwner(ownerType: String, ownerId: Long): Int

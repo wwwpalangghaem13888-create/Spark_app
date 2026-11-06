@@ -1,6 +1,5 @@
 package com.spark.habittracker
 
-import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import org.json.JSONArray
@@ -96,8 +95,7 @@ object SparkBackupManager {
         require(tasks.all { it.recurrenceParentId == null || it.recurrenceParentId in taskIds }) { "Recurring task references a missing parent." }
         require(sessions.all { it.linkedTaskId == null || it.linkedTaskId in taskIds }) { "Focus session references a missing task." }
         require(reminders.all { reminder ->
-            reminder.mode in setOf("NOTIFICATION", "ALARM") &&
-                reminder.ownerId > 0 && when (reminder.ownerType) {
+            reminder.ownerId > 0 && when (reminder.ownerType) {
                 "TASK" -> reminder.ownerId in taskIds
                 "HABIT" -> reminder.ownerId in habitIds
                 "FOCUS" -> reminder.ownerId in sessionIds
@@ -110,13 +108,12 @@ object SparkBackupManager {
             val days = rawDays.filter(String::isNotEmpty)
             days.isNotEmpty() && days.size == rawDays.size && days.distinct().size == days.size &&
                 days.all { it in allowedDays } &&
-                (habit.reminderTime.isBlank() || runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess)
+                runCatching { java.time.LocalTime.parse(habit.reminderTime) }.isSuccess
         }) { "Habit schedule or reminder time is invalid." }
         require(settings == null || (
             settings.id == 1 &&
                 settings.theme in setOf("neon", "dark", "minimal", "light") &&
-                settings.accent in setOf("violet", "cyan", "lime", "pink") &&
-                settings.language in setOf("fa", "en", "ar")
+                settings.accent in setOf("violet", "cyan", "lime", "pink")
         )) { "Appearance settings are invalid." }
 
         // Room's REPLACE strategy would overwrite an unrelated row with a colliding ID.
@@ -151,16 +148,6 @@ object SparkBackupManager {
             productivity.restoreFocusSessions(sessions)
             productivity.restoreReminders(reminders)
             settings?.let { habitDao.saveSettings(it) }
-        }
-        if (settings != null) {
-            syncLanguagePreference(context, settings.language)
-            (context as? Activity)?.recreate()
-        }
-        db.productivityDao().getEnabledReminders().forEach {
-            ReminderScheduler.cancel(context, it.id)
-            // Keep imported ALARM settings intact when Android exact-alarm
-            // access is currently denied; the permission receiver reschedules later.
-            ReminderScheduler.schedule(context, it)
         }
         return habits.size + logs.size + tasks.size + subtasks.size + history.size +
             goals.size + taskLinks.size + habitLinks.size + sessions.size + reminders.size +
@@ -254,12 +241,10 @@ object SparkBackupManager {
 
     private fun ReminderEntity.toJson() = JSONObject()
         .put("id", id).put("ownerType", ownerType).put("ownerId", ownerId).put("triggerAt", triggerAt)
-        .put("enabled", enabled).put("snoozedUntil", snoozedUntil ?: JSONObject.NULL)
-        .put("createdAt", createdAt).put("mode", mode)
+        .put("enabled", enabled).put("snoozedUntil", snoozedUntil ?: JSONObject.NULL).put("createdAt", createdAt)
 
     private fun UserSettingsEntity.toJson() = JSONObject()
-        .put("id", id).put("theme", theme).put("accent", accent)
-        .put("reducedMotion", reducedMotion).put("language", language)
+        .put("id", id).put("theme", theme).put("accent", accent).put("reducedMotion", reducedMotion)
 
     private fun JSONObject.toHabit() = HabitEntity(
         id = requiredLong("id"), title = requiredString("title"), note = optString("note"),
@@ -325,13 +310,11 @@ object SparkBackupManager {
     private fun JSONObject.toReminder() = ReminderEntity(
         id = requiredLong("id"), ownerType = requiredString("ownerType"), ownerId = requiredLong("ownerId"),
         triggerAt = requiredLong("triggerAt"), enabled = optBoolean("enabled", true),
-        snoozedUntil = optionalLong("snoozedUntil"), createdAt = requiredLong("createdAt"),
-        mode = optString("mode", "NOTIFICATION")
+        snoozedUntil = optionalLong("snoozedUntil"), createdAt = requiredLong("createdAt")
     )
 
     private fun JSONObject.toSettings() = UserSettingsEntity(
         id = optInt("id", 1), theme = optString("theme", "neon"),
-        accent = optString("accent", "violet"), reducedMotion = optBoolean("reducedMotion"),
-        language = optString("language", "fa")
+        accent = optString("accent", "violet"), reducedMotion = optBoolean("reducedMotion")
     )
 }

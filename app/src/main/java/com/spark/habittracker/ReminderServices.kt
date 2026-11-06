@@ -4,17 +4,11 @@ import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
-import android.media.MediaPlayer
-import android.media.RingtoneManager
 import android.os.Build
-import android.os.IBinder
-import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -29,12 +23,9 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 
-internal fun parseOptionalHabitReminderTime(value: String): LocalTime? =
-    value.trim().takeIf { it.isNotEmpty() }?.let(LocalTime::parse)
-
 internal fun nextHabitReminder(habit: HabitEntity, afterMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): Long? {
     if (!habit.isEnabled) return null
-    val time = runCatching { parseOptionalHabitReminderTime(habit.reminderTime) }.getOrNull() ?: return null
+    val time = runCatching { LocalTime.parse(habit.reminderTime) }.getOrNull() ?: return null
     val after = Instant.ofEpochMilli(afterMillis).atZone(zoneId)
     val scheduled = habit.scheduledDays.split(",").map { it.trim() }.toSet()
     for (offset in 0L..7L) {
@@ -46,25 +37,12 @@ internal fun nextHabitReminder(habit: HabitEntity, afterMillis: Long, zoneId: Zo
     return null
 }
 
-internal fun canScheduleExactAlarm(context: Context): Boolean {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
-    val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    return alarm.canScheduleExactAlarms()
-}
-
 object ReminderScheduler {
     const val ACTION_FIRE = "com.spark.habittracker.REMINDER_FIRE"
     const val ACTION_SNOOZE = "com.spark.habittracker.REMINDER_SNOOZE"
-    const val ACTION_EXACT_ALARM_PERMISSION_CHANGED =
-        "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
     private const val CHANNEL_ID = "spark_reminders"
 
-    fun schedule(context: Context, reminder: ReminderEntity): Boolean {
-        val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        // An inexact alarm cannot reliably launch the foreground media service
-        // from the background. Never silently downgrade the phone-alarm mode.
-        if (reminder.mode == "ALARM" && !canScheduleExactAlarm(context)) return false
-
+    fun schedule(context: Context, reminder: ReminderEntity) {
         val intent = Intent(context, ReminderReceiver::class.java)
             .setAction(ACTION_FIRE)
             .putExtra("reminder_id", reminder.id)
@@ -74,19 +52,8 @@ object ReminderScheduler {
             context, reminder.id.toInt(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val triggerAt = reminder.snoozedUntil ?: reminder.triggerAt
-        if (reminder.mode == "ALARM") {
-            val showIntent = PendingIntent.getActivity(
-                context,
-                900000 + reminder.id.toInt(),
-                Intent(context, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            alarm.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, showIntent), pending)
-        } else {
-            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
-        }
-        return true
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.snoozedUntil ?: reminder.triggerAt, pending)
     }
 
     fun cancel(context: Context, reminderId: Long) {
@@ -108,9 +75,8 @@ object ReminderScheduler {
 
     internal fun show(context: Context, reminderId: Long, ownerType: String) {
         ensureChannel(context)
-        if ((Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) ||
-            !NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
         val openIntent = PendingIntent.getActivity(
             context, 900000 + reminderId.toInt(), Intent(context, MainActivity::class.java),
@@ -133,103 +99,6 @@ object ReminderScheduler {
     }
 }
 
-internal suspend fun cancelAndDisableReminders(
-    context: Context,
-    db: SparkDatabase,
-    ownerType: String,
-    ownerId: Long
-) {
-    val dao = db.productivityDao()
-    dao.getRemindersForOwner(ownerType, ownerId).forEach { ReminderScheduler.cancel(context, it.id) }
-    dao.disableRemindersForOwner(ownerType, ownerId)
-}
-
-internal suspend fun cancelAndDeleteReminders(
-    context: Context,
-    db: SparkDatabase,
-    ownerType: String,
-    ownerId: Long
-) {
-    val dao = db.productivityDao()
-    dao.getRemindersForOwner(ownerType, ownerId).forEach { ReminderScheduler.cancel(context, it.id) }
-    dao.deleteRemindersForOwner(ownerType, ownerId)
-}
-
-class AlarmRingingService : Service() {
-    private var mediaPlayer: MediaPlayer? = null
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        val language = getSharedPreferences("spark_locale", Context.MODE_PRIVATE)
-            .getString("language", "fa") ?: "fa"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(ALARM_CHANNEL_ID, localizedText(language, "زنگ‌های Spark", "Spark alarms", "منبّهات Spark"), NotificationManager.IMPORTANCE_HIGH)
-            )
-        }
-        val stopIntent = Intent(this, AlarmStopReceiver::class.java).setAction(ACTION_STOP)
-        val stopPendingIntent = PendingIntent.getBroadcast(
-            this, STOP_REQUEST_CODE, stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val notification = NotificationCompat.Builder(this, ALARM_CHANNEL_ID)
-            .setSmallIcon(R.drawable.spark_logo)
-            .setContentTitle(localizedText(language, "زنگ هشدار Spark", "Spark alarm", "منبّه Spark"))
-            .setContentText(localizedText(language, "برای توقف، دکمه زیر را بزن.", "Tap Stop to silence this alarm.", "اضغط إيقاف لإسكات المنبّه."))
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .addAction(0, localizedText(language, "توقف", "Stop", "إيقاف"), stopPendingIntent)
-            .build()
-        startForeground(NOTIFICATION_ID, notification)
-
-        mediaPlayer?.release()
-        mediaPlayer = null
-        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        if (alarmUri != null) {
-            mediaPlayer = MediaPlayer().apply {
-                setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                setDataSource(applicationContext, alarmUri)
-                isLooping = true
-                prepare()
-                start()
-            }
-        }
-        return START_STICKY
-    }
-
-    override fun onDestroy() {
-        mediaPlayer?.run {
-            if (isPlaying) stop()
-            release()
-        }
-        mediaPlayer = null
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        super.onDestroy()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    companion object {
-        const val ACTION_STOP = "com.spark.habittracker.ALARM_STOP"
-        private const val ALARM_CHANNEL_ID = "spark_alarm_ringing"
-        private const val NOTIFICATION_ID = 74051
-        private const val STOP_REQUEST_CODE = 74052
-    }
-}
-
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val reminderId = intent.getLongExtra("reminder_id", -1L)
@@ -239,8 +108,7 @@ class ReminderReceiver : BroadcastReceiver() {
             try {
                 val db = Room.databaseBuilder(context.applicationContext, SparkDatabase::class.java, "spark_tracker.db")
                     .addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3,
-                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6,
-                        SparkDatabase.MIGRATION_6_7).build()
+                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build()
                 try {
                     val dao = db.productivityDao()
                     if (intent.action == ReminderScheduler.ACTION_SNOOZE) {
@@ -250,15 +118,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     } else {
                         val reminder = dao.getEnabledReminders().firstOrNull { it.id == reminderId }
                         if (reminder != null) {
-                            if (reminder.mode == "ALARM") {
-                                ContextCompat.startForegroundService(
-                                    context,
-                                    Intent(context, AlarmRingingService::class.java)
-                                        .putExtra("reminder_id", reminder.id)
-                                )
-                            } else {
-                                ReminderScheduler.show(context, reminder.id, reminder.ownerType)
-                            }
+                            ReminderScheduler.show(context, reminder.id, reminder.ownerType)
                             if (reminder.ownerType == "HABIT") {
                                 val habit = db.habitDao().findHabit(reminder.ownerId)
                                 val next = habit?.let { nextHabitReminder(it, System.currentTimeMillis() + 1000) }
@@ -310,54 +170,18 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 }
 
-class AlarmStopReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == AlarmRingingService.ACTION_STOP) {
-            context.stopService(Intent(context, AlarmRingingService::class.java))
-        }
-    }
-}
-
 class SparkBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action
-        if (action !in setOf(
-                Intent.ACTION_BOOT_COMPLETED,
-                Intent.ACTION_TIME_CHANGED,
-                Intent.ACTION_TIMEZONE_CHANGED,
-                Intent.ACTION_MY_PACKAGE_REPLACED,
-                ReminderScheduler.ACTION_EXACT_ALARM_PERMISSION_CHANGED
-            )
-        ) return
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 val db = Room.databaseBuilder(context.applicationContext, SparkDatabase::class.java, "spark_tracker.db")
                     .addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3,
-                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6,
-                        SparkDatabase.MIGRATION_6_7).build()
+                        SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build()
                 try {
-                    val dao = db.productivityDao()
-                    val rebuildHabitTimes = action == Intent.ACTION_TIME_CHANGED ||
-                        action == Intent.ACTION_TIMEZONE_CHANGED
-                    dao.getEnabledReminders().forEach { reminder ->
-                        var scheduledReminder = reminder
-                        if (rebuildHabitTimes && reminder.ownerType == "HABIT") {
-                            val habit = db.habitDao().findHabit(reminder.ownerId)
-                            val next = habit?.let { nextHabitReminder(it, System.currentTimeMillis() - 1L) }
-                            if (next == null) {
-                                dao.setReminderEnabled(reminder.id, false)
-                                ReminderScheduler.cancel(context, reminder.id)
-                                return@forEach
-                            }
-                            dao.updateReminderTrigger(reminder.id, next)
-                            scheduledReminder = reminder.copy(triggerAt = next, snoozedUntil = null)
-                        }
-                        ReminderScheduler.cancel(context, reminder.id)
-                        // A denied exact-alarm permission leaves ALARM records
-                        // persisted; the permission-state broadcast will retry them.
-                        ReminderScheduler.schedule(context, scheduledReminder)
-                    }
+                    db.productivityDao().getEnabledReminders()
+                        .forEach { ReminderScheduler.schedule(context, it) }
                 } finally {
                     db.close()
                 }
