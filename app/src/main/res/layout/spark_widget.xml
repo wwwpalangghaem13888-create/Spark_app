@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="#171127">
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SPARK • وظایف امروز"
+        android:textColor="#D6B8FF"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:paddingBottom="8dp" />
+    <TextView
+        android:id="@+id/widget_task_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#F8F5FF"
+        android:textSize="13sp"
+        android:padding="5dp" />
+    <TextView
+        android:id="@+id/widget_task_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#F8F5FF"
+        android:textSize="13sp"
+        android:padding="5dp" />
+    <TextView
+        android:id="@+id/widget_task_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#F8F5FF"
+        android:textSize="13sp"
+        android:padding="5dp" />
+    <TextView
+        android:id="@+id/widget_open"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="باز کردن Spark"
+        android:textColor="#72DDE0"
+        android:textStyle="bold"
+        android:gravity="end"
+        android:paddingTop="6dp" />
+</LinearLayout>
