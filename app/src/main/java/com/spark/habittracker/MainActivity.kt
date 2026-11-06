@@ -344,6 +344,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val tasks by taskRepository.observeActiveTasks().collectAsState(initial = emptyList())
     val archivedTasks by db.taskDao().observeArchivedTasks().collectAsState(initial = emptyList())
     val focusSessions by db.productivityDao().observeFocusSessions().collectAsState(initial = emptyList())
+    val taskHistory by db.productivityDao().observeAllTaskHistory().collectAsState(initial = emptyList())
     val habits by dao.observeHabits().collectAsState(initial = emptyList())
     val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
     val todayLogs by remember { dao.observeLogs(LocalDate.now().toString()) }.collectAsState(initial = emptyList())
@@ -428,7 +429,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     }
                 )
                 3 -> Statistics(habits, allLogs, tasks, focusSessions)
-                4 -> ProgressHub(todayHabits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
+                4 -> ProgressHub(todayHabits, allLogs, todayLogs, taskHistory, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
                 5 -> GoalsScreen(db.productivityDao(), tasks)
                 6 -> FocusScreen(db.productivityDao())
                 else -> BackupScreen(db)
@@ -691,10 +692,12 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
 
 
 @Composable
-private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
+private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, taskHistory: List<TaskCompletionEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
     val today = LocalDate.now()
     val completedLogs = completedHabitLogsThroughDate(allLogs, today)
-    val xp = calculateExperience(completedLogs.size)
+    val taskRewards = taskHistory.filter { it.completed && runCatching { LocalDate.parse(it.activityDate) <= today }.getOrDefault(false) }
+        .map { it.taskId to it.activityDate }.distinct().size
+    val xp = calculateExperience(completedLogs.size + taskRewards)
     val level = calculateLevel(xp)
     val xpInLevel = xp % 100
     val activeCount = habits.count { it.isEnabled }
@@ -727,7 +730,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                     Box(Modifier.fillMaxWidth(xpInLevel / 100f).fillMaxHeight().clip(CircleShape).background(Brush.horizontalGradient(listOf(Violet, Cyan))))
                 }
                 Text("$xpInLevel از ۱۰۰ XP تا سطح بعدی", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-                Text("هر ثبت موفق عادت = ۱۰ XP. امتیازها از سوابق ذخیره‌شده محاسبه می‌شوند.", color = Muted, fontSize = 10.sp)
+                Text("هر تکمیل یکتای عادت یا وظیفه در روز = ۱۰ XP. امتیازها از سوابق ذخیره‌شده محاسبه می‌شوند.", color = Muted, fontSize = 10.sp)
             }
         }
         item {
