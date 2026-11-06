@@ -833,6 +833,8 @@ private fun Statistics(
 
 @Composable
 private fun SparkLineChart(values: List<Float>, modifier: Modifier = Modifier) {
+    val lineColor = Violet
+    val pointColor = VioletLight
     Canvas(modifier) {
         if (values.isEmpty()) return@Canvas
         val left = 8f
@@ -845,7 +847,7 @@ private fun SparkLineChart(values: List<Float>, modifier: Modifier = Modifier) {
                 androidx.compose.ui.geometry.Offset(right, y), strokeWidth = 1.dp.toPx())
         }
         if (values.size == 1) {
-            drawCircle(Violet, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width / 2, top + (bottom-top) * (1f-values[0])))
+            drawCircle(lineColor, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width / 2, top + (bottom-top) * (1f-values[0])))
             return@Canvas
         }
         val points = values.mapIndexed { index, value ->
@@ -855,14 +857,17 @@ private fun SparkLineChart(values: List<Float>, modifier: Modifier = Modifier) {
             )
         }
         points.zipWithNext().forEach { (a,b) ->
-            drawLine(Violet, a, b, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+            drawLine(lineColor, a, b, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
         }
-        points.forEach { drawCircle(VioletLight, radius = 3.dp.toPx(), center = it) }
+        points.forEach { drawCircle(pointColor, radius = 3.dp.toPx(), center = it) }
     }
 }
 
 @Composable
 private fun SparkPieChart(completed: Int, remaining: Int, modifier: Modifier = Modifier) {
+    val completedColor = Violet
+    val remainingColor = Cyan
+    val holeColor = Panel
     Canvas(modifier) {
         val total = completed + remaining
         if (total <= 0) {
@@ -870,9 +875,9 @@ private fun SparkPieChart(completed: Int, remaining: Int, modifier: Modifier = M
             return@Canvas
         }
         val doneSweep = 360f * completed / total.toFloat()
-        drawArc(Violet, -90f, doneSweep, true)
-        if (remaining > 0) drawArc(Cyan, -90f + doneSweep, 360f - doneSweep, true)
-        drawCircle(Panel, radius = size.minDimension * 0.27f)
+        drawArc(completedColor, -90f, doneSweep, true)
+        if (remaining > 0) drawArc(remainingColor, -90f + doneSweep, 360f - doneSweep, true)
+        drawCircle(holeColor, radius = size.minDimension * 0.27f)
     }
 }
 
