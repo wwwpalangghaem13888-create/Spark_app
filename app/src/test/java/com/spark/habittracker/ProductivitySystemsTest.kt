@@ -116,6 +116,12 @@ class ProductivitySystemsTest {
     }
 
     @Test
+    fun csvExportNeutralizesSpreadsheetFormulaPrefixes() {
+        val csv = exportTasksCsv(listOf(TaskEntity(id = 9, title = "=IMPORTDATA(\"https://example.invalid\")")))
+        assertTrue(csv.contains("\"'=IMPORTDATA(\"\"https://example.invalid\"\")\""))
+    }
+
+    @Test
     fun csvExportEscapesQuotesAndCommas() {
         val csv = exportTasksCsv(
             listOf(
