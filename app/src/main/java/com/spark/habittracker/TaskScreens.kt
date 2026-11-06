@@ -278,7 +278,7 @@ fun TaskEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "وظیفه جدید" else "ویرایش وظیفه") },
+        title = { Text(if (initial == null || initial.id == 0L) "وظیفه جدید" else "ویرایش وظیفه") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(title, { title = it; error = null }, label = { Text("عنوان") }, singleLine = true)
