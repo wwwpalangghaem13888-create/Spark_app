@@ -11,7 +11,7 @@ data class HabitEntity(
     val title: String, val note: String, val category: String,
     val createdAt: Long = System.currentTimeMillis(),
     val scheduledDays: String = "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY",
-    val reminderTime: String = "", val isEnabled: Boolean = true, val reminderMode: String = "NOTIFICATION"
+    val reminderTime: String = "", val isEnabled: Boolean = true, @ColumnInfo(defaultValue = "'NOTIFICATION'") val reminderMode: String = "NOTIFICATION"
 )
 
 @Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "date"], unique = true), Index("date")], foreignKeys = [ForeignKey(entity = HabitEntity::class, parentColumns = ["id"], childColumns = ["habitId"], onDelete = ForeignKey.CASCADE)])
