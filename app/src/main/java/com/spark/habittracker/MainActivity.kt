@@ -341,6 +341,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
     val taskRepository = remember(db) { TaskRepository(db.taskDao()) }
     val tasks by taskRepository.observeActiveTasks().collectAsState(initial = emptyList())
+    val archivedTasks by db.taskDao().observeArchivedTasks().collectAsState(initial = emptyList())
     val habits by dao.observeHabits().collectAsState(initial = emptyList())
     val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
     val todayLogs by remember { dao.observeLogs(LocalDate.now().toString()) }.collectAsState(initial = emptyList())
@@ -403,6 +404,8 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     onArchive = { task -> scope.launch { taskRepository.archive(task.id); SparkWidgetProvider.refreshAll(context) } },
                     onDelete = { task -> scope.launch { taskRepository.deletePermanently(task.id); SparkWidgetProvider.refreshAll(context) } },
                     onDuplicate = { task -> scope.launch { taskRepository.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
+                    onRestore = { task -> scope.launch { taskRepository.restore(task.id); SparkWidgetProvider.refreshAll(context) } },
+                    archivedTasks = archivedTasks,
                     productivityDao = db.productivityDao()
                 )
                 2 -> SparkCalendarScreen(
