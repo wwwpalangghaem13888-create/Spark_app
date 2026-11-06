@@ -17,16 +17,18 @@ sealed interface SparkResult<out T> {
     data class Failure(val error: SparkError, val cause: Throwable? = null) : SparkResult<Nothing>
 }
 
+internal fun Throwable.toSparkError(): SparkError = when (this) {
+    is IllegalArgumentException -> SparkError.Validation
+    is NoSuchElementException -> SparkError.NotFound
+    is SecurityException -> SparkError.Permission
+    is android.database.SQLException -> SparkError.Storage
+    else -> SparkError.Unexpected
+}
+
 internal inline fun <T> sparkResult(block: () -> T): SparkResult<T> = try {
     SparkResult.Success(block())
-} catch (error: IllegalArgumentException) {
-    SparkResult.Failure(SparkError.Validation, error)
-} catch (error: SecurityException) {
-    SparkResult.Failure(SparkError.Permission, error)
-} catch (error: android.database.SQLException) {
-    SparkResult.Failure(SparkError.Storage, error)
 } catch (error: Throwable) {
-    SparkResult.Failure(SparkError.Unexpected, error)
+    SparkResult.Failure(error.toSparkError(), error)
 }
 
 fun SparkError.userMessage(): String = when (this) {
