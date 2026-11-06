@@ -144,6 +144,8 @@ class TaskRepository(private val dao: TaskDao) {
             title = task.title + " (کپی)",
             completed = false,
             completedAt = null,
+            reminderAt = null,
+            recurrenceParentId = null,
             archived = false,
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
