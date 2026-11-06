@@ -1,7 +1,7 @@
 package com.spark.habittracker
 
 import android.icu.text.SimpleDateFormat as IcuSimpleDateFormat
-import android.icu.util.PersianCalendar
+import android.icu.util.Calendar
 import android.icu.util.ULocale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -200,9 +200,10 @@ fun SparkCalendarScreen(
 
 private fun persianDateLabel(date: LocalDate, pattern: String): String {
     val millis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val calendar = PersianCalendar(TimeZone.getDefault(), ULocale("fa_IR"))
+    val persianLocale = ULocale("fa_IR@calendar=persian")
+    val calendar = Calendar.getInstance(TimeZone.getDefault(), persianLocale)
     calendar.timeInMillis = millis
-    val formatter = IcuSimpleDateFormat(pattern, ULocale("fa_IR"))
+    val formatter = IcuSimpleDateFormat(pattern, persianLocale)
     formatter.calendar = calendar
     return formatter.format(Date(millis))
 }
