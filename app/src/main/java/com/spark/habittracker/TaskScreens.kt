@@ -110,7 +110,7 @@ fun TaskListScreen(
                     label = { Text(label) }
                 )
             }
-            FilterChip(selected = showArchived, onClick = { showArchived = !showArchived }, label = { Text(if (showArchived) "نمایش فعال‌ها" else "بایگانی") })
+            FilterChip(selected = showArchived, onClick = { showArchived = !showArchived }, label = { Text(if (showArchived) localizedText(language, "نمایش فعال‌ها", "Show active", "عرض النشطة") else localizedText(language, "بایگانی", "Archived", "الأرشيف")) })
         }
         if (visible.isEmpty()) {
             Column(
@@ -118,8 +118,8 @@ fun TaskListScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(Icons.Default.AddTask, contentDescription = null)
-                Text(if (sourceTasks.isEmpty()) if (showArchived) "کار بایگانی‌شده‌ای وجود ندارد." else "هنوز کاری ثبت نشده." else "موردی با این فیلتر پیدا نشد.")
-                Text("برای ثبت اولین کار از دکمه افزودن استفاده کن.")
+                Text(if (sourceTasks.isEmpty()) if (showArchived) localizedText(language, "کار بایگانی‌شده‌ای وجود ندارد.", "No archived tasks.", "لا توجد مهام مؤرشفة.") else localizedText(language, "هنوز کاری ثبت نکردی.", "No tasks yet.", "لم تسجل أي مهام بعد.") else localizedText(language, "موردی با این فیلتر پیدا نشد.", "No tasks match this filter.", "لا توجد مهام تطابق هذا التصفية."))
+                Text(localizedText(language, "برای ثبت اولین کار از دکمه افزودن استفاده کن.", "Tap Add to create your first task.", "اضغط إضافة لإنشاء مهمتك الأولى."))
             }
         } else {
             LazyColumn(
@@ -157,6 +157,7 @@ private fun TaskCard(
     onManageSubtasks: () -> Unit,
     onRestore: () -> Unit
 ) {
+    val language = LocalSparkLanguage.current
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val overdue = taskIsOverdue(task, LocalDate.now())
@@ -180,40 +181,40 @@ private fun TaskCard(
             val details = listOfNotNull(
                 task.category,
                 taskPriorityLabel(task.priority),
-                task.dueDate?.let { "مهلت: $it" },
-                task.startAt?.let { "شروع: " + formatTaskTime(it) },
-                task.endAt?.let { "پایان: " + formatTaskTime(it) }
+                task.dueDate?.let { localizedText(language, "مهلت: $it", "Due: $it", "الموعد: $it") },
+                task.startAt?.let { localizedText(language, "شروع: ", "Start: ", "البداية: ") + formatTaskTime(it) },
+                task.endAt?.let { localizedText(language, "پایان: ", "End: ", "النهاية: ") + formatTaskTime(it) }
             ).joinToString(" • ")
             Text(details, style = MaterialTheme.typography.bodySmall)
             if (task.description.isNotBlank()) {
                 Text(task.description, style = MaterialTheme.typography.bodySmall, maxLines = 2)
             }
-            if (overdue) Text("عقب‌افتاده", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+            if (overdue) Text(localizedText(language, "عقب‌افتاده", "Overdue", "متأخرة"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
             if (task.tags.isNotBlank()) Text(task.tags, style = MaterialTheme.typography.labelSmall)
         }
         Box {
             TextButton(onClick = { menuOpen = true }) { Text("•••") }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("ویرایش") },
+                    text = { Text(localizedText(language, "ویرایش", "Edit", "تعديل")) },
                     leadingIcon = { Icon(Icons.Default.Edit, null) },
                     onClick = { menuOpen = false; onEdit() }
                 )
                 DropdownMenuItem(
-                    text = { Text("زیرکارها") },
+                    text = { Text(localizedText(language, "زیرکارها", "Subtasks", "المهام الفرعية")) },
                     onClick = { menuOpen = false; onManageSubtasks() }
                 )
                 DropdownMenuItem(
-                    text = { Text("کپی کار") },
+                    text = { Text(localizedText(language, "کپی کار", "Duplicate task", "نسخ المهمة")) },
                     onClick = { menuOpen = false; onDuplicate() }
                 )
                 DropdownMenuItem(
-                    text = { Text(if (task.archived) "بازیابی از بایگانی" else "بایگانی") },
+                    text = { Text(if (task.archived) localizedText(language, "بازیابی از بایگانی", "Restore from archive", "استعادة من الأرشيف") else localizedText(language, "بایگانی", "Archive", "أرشفة")) },
                     leadingIcon = { Icon(Icons.Default.Archive, null) },
                     onClick = { menuOpen = false; if (task.archived) onRestore() else onArchive() }
                 )
                 DropdownMenuItem(
-                    text = { Text("حذف دائمی") },
+                    text = { Text(localizedText(language, "حذف دائمی", "Delete permanently", "حذف نهائي")) },
                     leadingIcon = { Icon(Icons.Default.Delete, null) },
                     onClick = { menuOpen = false; confirmDelete = true }
                 )
@@ -222,8 +223,8 @@ private fun TaskCard(
     }
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
-        title = { Text("حذف دائمی کار؟") },
-        text = { Text("این عملیات قابل بازگشت نیست و زیرکارها و تاریخچهٔ وابسته نیز حذف می‌شوند.") },
+        title = { Text(localizedText(language, "حذف دائمی کار؟", "Delete task permanently?", "حذف المهمة نهائياً؟")) },
+        text = { Text(localizedText(language, "این کار برنمی‌گردد و زیرکارها و تاریخچهٔ وابسته هم حذف می‌شوند.", "This cannot be undone. Subtasks and related history will also be deleted.", "لا يمكن التراجع عن هذا. ستُحذف المهام الفرعية والسجل المرتبط أيضاً.")) },
         confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("حذف") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("انصراف") } }
     )
@@ -232,15 +233,16 @@ private fun TaskCard(
 
 @Composable
 private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: () -> Unit) {
+    val language = LocalSparkLanguage.current
     val subtasks by dao.observeSubtasks(taskId).collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("زیرکارهای این کار") },
+        title = { Text(localizedText(language, "زیرکارهای این کار", "Subtasks", "المهام الفرعية")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text("عنوان زیرکار") }, singleLine = true)
+                OutlinedTextField(title, { title = it }, label = { Text(localizedText(language, "عنوان زیرکار", "Subtask title", "عنوان المهمة الفرعية")) }, singleLine = true)
                 subtasks.forEach { item ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Checkbox(
@@ -259,9 +261,9 @@ private fun TaskSubtasksDialog(taskId: Long, dao: ProductivityDao, onDismiss: ()
                     dao.saveSubtask(TaskSubtaskEntity(taskId = taskId, title = title.trim(), position = subtasks.size))
                     title = ""
                 }
-            }) { Text("افزودن") }
+            }) { Text(localizedText(language, "افزودن", "Add", "إضافة")) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("بستن") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localizedText(language, "بستن", "Close", "إغلاق")) } }
     )
 }
 
