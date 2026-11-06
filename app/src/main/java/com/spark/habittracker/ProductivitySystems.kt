@@ -238,6 +238,9 @@ interface ProductivityDao {
     @Query("SELECT * FROM focus_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
     suspend fun findActiveFocusSession(): FocusSessionEntity?
 
+    @Query("SELECT * FROM focus_sessions WHERE id = :sessionId AND endedAt IS NULL LIMIT 1")
+    suspend fun findActiveFocusSessionById(sessionId: Long): FocusSessionEntity?
+
     @Query("SELECT * FROM focus_sessions ORDER BY startedAt DESC")
     fun observeFocusSessions(): Flow<List<FocusSessionEntity>>
 

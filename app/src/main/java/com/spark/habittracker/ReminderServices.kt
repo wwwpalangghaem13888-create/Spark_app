@@ -129,7 +129,34 @@ class ReminderReceiver : BroadcastReceiver() {
                                     dao.setReminderEnabled(reminder.id, false)
                                 }
                             } else {
-                                dao.setReminderEnabled(reminder.id, false)
+                                if (reminder.ownerType == "FOCUS") {
+                                    val session = dao.findActiveFocusSessionById(reminder.ownerId)
+                                    if (session != null && session.mode != "STOPWATCH" && session.pausedAt == null) {
+                                        val now = System.currentTimeMillis()
+                                        val elapsed = focusElapsedSeconds(session, now)
+                                        val remaining = (session.plannedDurationSeconds - elapsed).coerceAtLeast(0)
+                                        if (remaining == 0L) {
+                                            dao.finishFocusSession(
+                                                session.id,
+                                                elapsed.coerceAtMost(session.plannedDurationSeconds),
+                                                true,
+                                                now
+                                            )
+                                            dao.setReminderEnabled(reminder.id, false)
+                                        } else {
+                                            val nextTrigger = now + remaining * 1000L
+                                            dao.updateReminderTrigger(reminder.id, nextTrigger)
+                                            ReminderScheduler.schedule(
+                                                context,
+                                                reminder.copy(triggerAt = nextTrigger, snoozedUntil = null)
+                                            )
+                                        }
+                                    } else {
+                                        dao.setReminderEnabled(reminder.id, false)
+                                    }
+                                } else {
+                                    dao.setReminderEnabled(reminder.id, false)
+                                }
                             }
                         }
                     }
