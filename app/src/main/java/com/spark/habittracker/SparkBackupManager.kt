@@ -207,7 +207,7 @@ object SparkBackupManager {
     private fun HabitEntity.toJson() = JSONObject()
         .put("id", id).put("title", title).put("note", note).put("category", category)
         .put("createdAt", createdAt).put("scheduledDays", scheduledDays)
-        .put("reminderTime", reminderTime).put("isEnabled", isEnabled)
+        .put("reminderTime", reminderTime).put("isEnabled", isEnabled).put("reminderMode", reminderMode)
 
     private fun HabitLogEntity.toJson() = JSONObject()
         .put("id", id).put("habitId", habitId).put("date", date)
@@ -259,7 +259,8 @@ object SparkBackupManager {
         category = optString("category", "عمومی"), createdAt = requiredLong("createdAt"),
         scheduledDays = optString("scheduledDays", "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY")
             .split(",").map { it.trim().uppercase(java.util.Locale.ROOT) }.filter { it.isNotEmpty() }.distinct().joinToString(","),
-        reminderTime = optString("reminderTime", "08:00"), isEnabled = optBoolean("isEnabled", true)
+        reminderTime = optString("reminderTime", "08:00"), isEnabled = optBoolean("isEnabled", true),
+        reminderMode = optString("reminderMode", "NOTIFICATION")
     )
 
     private fun JSONObject.toHabitLog() = HabitLogEntity(
