@@ -676,16 +676,6 @@ private fun Statistics(
             }
         }
     }
-    if (showColorStudio) {
-        CustomAccentDialog(
-            initialAccent = settings.accent,
-            onDismiss = { showColorStudio = false },
-            onSave = { colorHex ->
-                onSettingsChange(settings.copy(accent = colorHex))
-                showColorStudio = false
-            }
-        )
-    }
 }
 
 @Composable
@@ -983,6 +973,16 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                 }
             }
         }
+    }
+    if (showColorStudio) {
+        CustomAccentDialog(
+            initialAccent = settings.accent,
+            onDismiss = { showColorStudio = false },
+            onSave = { colorHex ->
+                onSettingsChange(settings.copy(accent = colorHex))
+                showColorStudio = false
+            }
+        )
     }
 }
 
