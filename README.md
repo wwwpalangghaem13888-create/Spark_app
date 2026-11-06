@@ -4,55 +4,59 @@ A Persian-first, offline-capable Android productivity application built with Kot
 
 ## Implemented on the `spark-5.0` branch
 
-### Tasks
+### Task management
 - Create, edit, duplicate, complete, archive, restore and permanently delete tasks.
-- Descriptions, categories, tags, four priority levels, due dates, start/end times and search/filter.
-- Daily, weekly, weekdays-only and monthly recurrence with calendar-date handling and duplicate-occurrence protection.
-- Subtasks and checklists with persistent completion state.
-- Task completion history; completion and history changes are stored transactionally.
-- Optional task reminders.
+- Descriptions, categories, tags, four priority levels, due dates, start/end times and search/filter views.
+- Daily, weekly, weekdays-only and monthly recurrence using local calendar dates.
+- Subtasks/checklists with persisted completion state.
+- Task completion history with transactional state changes.
+- Optional one-off task reminders; reminders are disabled when the task is completed or archived.
 
 ### Habits and calendar
-- Habit creation with custom selected weekdays and a local reminder time.
-- Daily recurring habit reminders based on selected days.
-- Habit history and schedule-aware streak calculation.
-- Month, week and day calendar views, Saturday-first week layout and Persian-calendar labels.
-- Task and habit activity shown from saved records. Future habit check-offs are disabled.
+- Habit creation with selected weekdays and a local reminder time.
+- Recurring habit reminders on the selected local weekdays.
+- Schedule-aware streak calculations and saved completion history.
+- Monthly, weekly and daily calendar views; Saturday-first weeks and Persian-calendar date labels.
+- Calendar agenda combines scheduled habits, stored habit logs and tasks due on the selected date.
+- Quick task creation prefilled with the selected calendar date.
+- Future habit check-offs are disabled.
 
 ### Focus and goals
-- Persisted focus sessions with selectable 25, 50 or 90 minute durations.
-- Timer recovery from saved timestamps after app backgrounding or process recreation.
-- Pause, resume and finish actions with stored session history.
-- Measurable goals linked to tasks, with progress calculated from completed linked tasks.
+- Persisted countdown sessions with selectable 25/50/90 minute focus durations, custom durations and 5/15 minute break presets.
+- Stopwatch mode.
+- Pause/resume and recovery from persisted timestamps after backgrounding or process recreation.
+- Focus completion reminders and stored session history.
+- Measurable goals with target dates, linked tasks and linked habits; progress is calculated from saved completions in the goal's date range.
 
 ### Analytics, XP and insights
-- Interactive 7, 30 and 90 day analytics periods.
-- Habit opportunities, completed tasks, focus duration, daily activity and category summaries derived from local records.
-- XP for completed habit-days and unique task completions per task/day, avoiding repeat-toggle reward inflation.
-- Levels, milestones, daily challenge and deterministic local weekly insights.
+- Interactive 7, 30, 90 and 365 day report periods.
+- Habit opportunities, task completions, focus duration, daily activity and task-category summaries from local records.
+- XP for completed habit-days and unique task completions per task/day, reducing repeated-toggle reward inflation.
+- Levels, milestone achievements, daily and weekly activity challenges.
+- Deterministic local weekly insights; no remote AI service is claimed.
 
 ### Reminders and widgets
-- Android reminder notifications with a 10-minute snooze action.
-- Inexact alarm scheduling using `setAndAllowWhileIdle`; delivery is subject to Android battery and background restrictions. Exact-alarm delivery is not claimed.
+- Android notifications with a 10-minute snooze action.
+- Inexact alarm scheduling via `AlarmManager.setAndAllowWhileIdle`; delivery remains subject to Android power-management restrictions. Exact delivery is not claimed.
 - Habit reminders reschedule for the next selected local weekday.
-- One-off task reminders are disabled after completion.
-- Reboot recovery reschedules enabled future reminders.
-- A real Android home-screen widget displays up to three open tasks and supports quick task completion.
+- One-off task and focus reminders are disabled after firing.
+- Reboot recovery for enabled future reminders.
+- A home-screen widget displays up to three open tasks and supports quick task completion.
 
-### Backup, restore and appearance
-- Versioned local JSON backup includes habits, habit logs, tasks, subtasks, task history, goals, goal links, focus sessions, reminders and appearance settings.
-- Validated merge-only restore. The importer checks format, version, dates and references before writing in a transaction; it does not clear the existing database.
-- CSV export for tasks with quoted/escaped text.
-- Dark/neon, minimal and light appearance options; violet, cyan, lime and pink accent choices; reduced-motion preference.
-- Persian RTL interface and English-safe date/data storage.
+### Backup, restore and customization
+- Versioned JSON backup includes habits, habit logs, tasks, subtasks, task history, goals, goal links, focus sessions, reminders and appearance settings.
+- Validated merge-only restore. The importer checks format, version, dates and record references before writing in a transaction; it does not clear the current database.
+- CSV task export with quoting and spreadsheet-formula prefix protection.
+- Neon/dark, minimal and light themes; violet, cyan, lime and pink accents; reduced-motion preference.
+- Persian RTL interface and Persian-calendar display in the calendar.
 
 ## Data safety and privacy
 
-- Local database name: `spark_tracker.db`.
-- Room schema migrations are additive from the existing schema through version 6; no destructive fallback migration is configured.
-- Imported records are validated before transactional merge.
-- No sign-in, cloud synchronization, remote AI or analytics SDK is required. Core features work offline.
-- No API keys or service credentials are embedded in the app.
+- Local Room database: `spark_tracker.db`.
+- Additive migrations from the existing schema through database version 6; no destructive fallback migration is configured.
+- Restore merges by record IDs and runs in a database transaction.
+- Core use does not require sign-in, internet, cloud sync or a remote AI service.
+- No API keys or service credentials are embedded in the repository.
 
 ## Build
 
@@ -64,24 +68,25 @@ gradle testDebugUnitTest assembleDebug
 
 Debug APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
-GitHub Actions builds and uploads the debug APK as `Spark-debug-apk` for pushes to the configured development branches. Check the run for the exact commit before treating an APK as current.
+GitHub Actions runs unit tests and builds a debug APK for pushes to the configured branches. Check the workflow run for the exact commit before installing an artifact.
 
-## Not yet complete or not yet verified
+## Remaining work and release limitations
 
-This branch is a substantial implementation step, but it is not yet a fully production-qualified release.
+This is a substantially expanded engineering build, not yet a fully production-qualified commercial release.
 
-- The presentation/database code is not yet fully split into ViewModel, domain, data and DI modules; MainActivity still contains legacy database/theme/application wiring.
-- Navigation is Compose tab state, not a dedicated Navigation Compose graph.
-- Goals currently link tasks in the UI; habit linking, milestone editing, long-term planning workflows and goal history UI remain incomplete.
-- Focus is a persisted countdown timer; stopwatch mode, configurable short/long breaks, session goals and ambient audio are not implemented.
-- The widget is task-focused; dedicated habit, daily-progress and focus widgets remain incomplete.
-- Reminder delivery is inexact and depends on OS permission/battery behavior. Quiet hours, notification preferences, notification history and per-reminder editing UI remain incomplete.
-- Analytics currently emphasizes habit/task/focus totals. Yearly comparisons, best category/day analysis and a full heatmap are not all surfaced in the UI.
-- Gamification has basic XP, levels, milestones and a daily challenge; a full weekly challenge and personal-record system remain incomplete.
-- Backup restore merges by IDs; a guided conflict-resolution UI and CSV import are not implemented.
-- Cloud sync is intentionally not enabled without a secure backend and user-controlled configuration.
-- Migration tests on real legacy database fixtures, Android UI tests, performance profiling, Baseline Profiles and device-level QA remain to be completed.
-- Release APK signing, R8 validation and a production release build have not yet been verified.
+- MainActivity still contains legacy database, theme and application wiring. Presentation, domain and data layers are not fully separated; ViewModels, dependency injection and a dedicated Navigation Compose graph remain to be completed.
+- Task history is persisted but does not yet have a dedicated detailed history screen. Task recurrence has basic rules and occurrence de-duplication, but advanced exception editing and recurring reminder policies remain incomplete.
+- Habit skip states, longest-streak records, full weekly/monthly heatmap views and habit performance comparisons remain incomplete.
+- Goals support task/habit links and date-bounded progress, but goal editing, milestone workflows and goal-history UI remain incomplete.
+- Focus stopwatch and countdown are implemented; ambient audio, configurable long-break cycles, session targets and advanced focus reports remain incomplete.
+- The widget is task-focused. Separate habit-completion, daily-progress and focus-timer widgets remain incomplete.
+- Reminder preferences, quiet hours, notification history and exact-alarm opt-in are not implemented. Alarm delivery is intentionally inexact.
+- Analytics provides 7/30/90/365 day summaries, but full year-over-year comparisons and a dedicated habit heatmap are not implemented.
+- Gamification includes XP, levels, milestones and daily/weekly challenges; a complete personal-record and achievement-history experience remains incomplete.
+- Backup is local JSON merge/restore and task CSV export. CSV import, conflict-resolution UI and cloud synchronization are not implemented.
+- English localization and LTR UI are not complete; the current interface is Persian RTL.
+- Room migration tests against archived real-world database fixtures, Android UI/navigation tests, physical-device QA and performance profiling remain to be completed.
+- R8/release optimization, Baseline Profiles, release signing and a production release APK have not been verified.
 
 ## Branch safety
 
