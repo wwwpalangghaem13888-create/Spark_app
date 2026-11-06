@@ -51,12 +51,11 @@ jobs:
           heap-size: 512
           script: |
             set +e
+            mkdir -p app/build/outputs
+            adb logcat -c || true
+            trap 'adb logcat -d -v threadtime > app/build/outputs/androidTest-logcat.txt 2>&1 || true' EXIT
             gradle connectedDebugAndroidTest --stacktrace --info
             test_status=$?
-            if [ "$test_status" -ne 0 ]; then
-              mkdir -p app/build/outputs
-              adb logcat -d -v threadtime > app/build/outputs/androidTest-logcat.txt
-            fi
             exit "$test_status"
 
       - name: Upload instrumentation diagnostics
@@ -66,6 +65,7 @@ jobs:
           name: Spark-instrumentation-diagnostics
           path: |
             app/build/outputs/androidTest-logcat.txt
+            app/build/outputs/androidTest-results/connected/debug/
             app/build/reports/androidTests/connected/debug/
           if-no-files-found: ignore
           retention-days: 7
