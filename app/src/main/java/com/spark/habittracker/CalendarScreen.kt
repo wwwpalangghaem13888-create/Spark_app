@@ -130,7 +130,7 @@ fun SparkCalendarScreen(
         }
         if (mode != CalendarMode.DAY) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                (when (language) { "en" -> listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"); "ar" -> listOf("أح", "اث", "ثل", "أر", "خم", "جم", "سب"); else -> listOf("ش", "ی", "د", "س", "چ", "پ", "ج") }).forEach {
+                (when (language) { "en" -> listOf("Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"); "ar" -> listOf("سب", "أح", "اث", "ثل", "أر", "خم", "جم"); else -> listOf("ش", "ی", "د", "س", "چ", "پ", "ج") }).forEach {
                     Text(it, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
                 }
             }
