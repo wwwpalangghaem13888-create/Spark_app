@@ -29,6 +29,13 @@ data class TaskEntity(
     val category: String = "عمومی",
     /** ISO-8601 local date (yyyy-MM-dd); null means no deadline. */
     val dueDate: String? = null,
+    /** Optional local epoch milliseconds for planned start/end times. */
+    val startAt: Long? = null,
+    val endAt: Long? = null,
+    /** DAILY, WEEKLY, WEEKDAYS, or MONTHLY; null means one-off. */
+    val recurrenceRule: String? = null,
+    /** Links generated occurrences to their original recurring task. */
+    val recurrenceParentId: Long? = null,
     /** 0 = low, 1 = normal, 2 = high, 3 = urgent. */
     val priority: Int = 1,
     val tags: String = "",
