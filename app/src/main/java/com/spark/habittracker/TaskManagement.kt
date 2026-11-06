@@ -20,7 +20,8 @@ import java.time.LocalDate
     indices = [
         Index(value = ["dueDate"]),
         Index(value = ["archived", "completed"]),
-        Index(value = ["priority"])
+        Index(value = ["priority"]),
+        Index(value = ["recurrenceParentId", "dueDate"])
     ]
 )
 data class TaskEntity(
