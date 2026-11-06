@@ -109,7 +109,7 @@ data class ReminderEntity(
     val enabled: Boolean = true,
     val snoozedUntil: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val mode: String = "NOTIFICATION"
+    @ColumnInfo(defaultValue = "'NOTIFICATION'") val mode: String = "NOTIFICATION"
 )
 
 /** Persistence boundary for task history, subtasks, goals, focus sessions and reminders. */
