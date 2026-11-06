@@ -89,6 +89,15 @@ class TaskRepository(private val dao: TaskDao) {
         )
         require(normalized.title.isNotBlank()) { "Task title must not be blank." }
         normalized.dueDate?.let { LocalDate.parse(it) }
+        require(normalized.startAt == null || normalized.endAt == null || normalized.endAt > normalized.startAt) {
+            "Task end time must be after its start time."
+        }
+        require(normalized.recurrenceRule == null || normalized.dueDate != null) {
+            "Recurring tasks require a due date."
+        }
+        require(normalized.recurrenceRule == null || normalized.recurrenceRule in setOf("DAILY", "WEEKLY", "WEEKDAYS", "MONTHLY")) {
+            "Unsupported recurrence rule."
+        }
         return if (normalized.id == 0L) dao.insert(normalized)
         else {
             dao.update(normalized)
