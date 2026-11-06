@@ -2,12 +2,16 @@ package com.spark.habittracker
 import android.os.Bundle
 import android.os.Build
 import android.content.pm.PackageManager
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.NumberPicker
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -22,6 +26,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
@@ -685,13 +690,21 @@ private fun HabitEditor(
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var note by remember(initial) { mutableStateOf(initial?.note.orEmpty()) }
     var category by remember(initial) { mutableStateOf(initial?.category ?: "عمومی") }
-    var reminderTime by remember(initial) { mutableStateOf(initial?.reminderTime ?: "08:00") }
+    val initialTime = remember(initial) {
+        runCatching { java.time.LocalTime.parse(initial?.reminderTime ?: "08:00") }
+            .getOrElse { java.time.LocalTime.of(8, 0) }
+    }
+    var selectedHour by remember(initial) { mutableStateOf(initialTime.hour) }
+    var selectedMinute by remember(initial) { mutableStateOf(initialTime.minute) }
+    var draftHour by remember(initial) { mutableStateOf(initialTime.hour) }
+    var draftMinute by remember(initial) { mutableStateOf(initialTime.minute) }
+    var showTimePicker by remember { mutableStateOf(false) }
     val days = listOf(
         "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
         "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
     )
     var selectedDays by remember(initial) {
-        mutableStateOf(initial?.scheduledDays?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: days.map { it.first }.toSet())
+        mutableStateOf(initial?.scheduledDays?.split(",")?.map { it.trim().uppercase(Locale.ROOT) }?.filter { it.isNotBlank() }?.toSet() ?: emptySet())
     }
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = dismiss, containerColor = Panel,
@@ -704,21 +717,127 @@ private fun HabitEditor(
             days.chunked(4).forEach { group ->
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     group.forEach { (key, label) ->
-                        FilterChip(selected = key in selectedDays,
-                            onClick = { selectedDays = if (key in selectedDays) selectedDays - key else selectedDays + key },
-                            label = { Text(label) })
+                        val selected = key in selectedDays
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                selectedDays = if (selected) selectedDays - key else selectedDays + key
+                                error = null
+                            },
+                            label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.Transparent,
+                                labelColor = Muted,
+                                selectedContainerColor = Color(0xFF1976D2),
+                                selectedLabelColor = Color.White
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (selected) Color(0xFF1976D2) else Muted.copy(alpha = 0.65f)
+                            )
+                        )
                     }
                 }
             }
-            OutlinedTextField(reminderTime, { reminderTime = it; error = null }, label = { Text("ساعت یادآوری (HH:mm)") }, singleLine = true)
+            Text("ساعت یادآوری", color = Muted, fontSize = 12.sp)
+            OutlinedButton(
+                onClick = {
+                    draftHour = selectedHour
+                    draftMinute = selectedMinute
+                    showTimePicker = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, Muted.copy(alpha = 0.55f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = White)
+            ) {
+                Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF42A5F5))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    String.format(Locale.ROOT, "%02d:%02d", selectedHour, selectedMinute),
+                    color = White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.weight(1f))
+                Text("تغییر ساعت", color = Color(0xFF64B5F6), fontSize = 12.sp)
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
         } },
         confirmButton = { TextButton(onClick = {
-            val validTime = runCatching { java.time.LocalTime.parse(reminderTime) }.isSuccess
             if (title.isBlank()) error = "عنوان نمی‌تواند خالی باشد."
             else if (selectedDays.isEmpty()) error = "حداقل یک روز انتخاب کن."
-            else if (!validTime) error = "ساعت باید با قالب HH:mm وارد شود."
-            else save(title, note, category, days.filter { it.first in selectedDays }.joinToString(",") { it.first }, reminderTime)
+            else {
+                val reminderTime = String.format(Locale.ROOT, "%02d:%02d", selectedHour, selectedMinute)
+                save(title, note, category, days.filter { it.first in selectedDays }.joinToString(",") { it.first }, reminderTime)
+            }
         }) { Text("ذخیره", color = Violet) } },
         dismissButton = { TextButton(onClick = dismiss) { Text("انصراف", color = Muted) } })
+    if (showTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            containerColor = Panel,
+            title = { Text("انتخاب ساعت یادآوری", color = White) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Text("ساعت", color = Muted)
+                        Text("دقیقه", color = Muted)
+                    }
+                    AndroidView(
+                        modifier = Modifier.fillMaxWidth().height(150.dp),
+                        factory = { context ->
+                            LinearLayout(context).apply {
+                                orientation = LinearLayout.HORIZONTAL
+                                gravity = Gravity.CENTER
+                                addView(
+                                    NumberPicker(context).apply {
+                                        minValue = 0
+                                        maxValue = 23
+                                        wrapSelectorWheel = true
+                                        setFormatter { value -> String.format(Locale.ROOT, "%02d", value) }
+                                        setOnValueChangedListener { _, _, newValue -> draftHour = newValue }
+                                    },
+                                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+                                )
+                                addView(
+                                    NumberPicker(context).apply {
+                                        minValue = 0
+                                        maxValue = 59
+                                        wrapSelectorWheel = true
+                                        setFormatter { value -> String.format(Locale.ROOT, "%02d", value) }
+                                        setOnValueChangedListener { _, _, newValue -> draftMinute = newValue }
+                                    },
+                                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+                                )
+                            }
+                        },
+                        update = { wheels ->
+                            val hourWheel = wheels.getChildAt(0) as NumberPicker
+                            val minuteWheel = wheels.getChildAt(1) as NumberPicker
+                            if (hourWheel.value != draftHour) hourWheel.value = draftHour
+                            if (minuteWheel.value != draftMinute) minuteWheel.value = draftMinute
+                        }
+                    )
+                    Text(
+                        String.format(Locale.ROOT, "%02d:%02d", draftHour, draftMinute),
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF64B5F6),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedHour = draftHour
+                    selectedMinute = draftMinute
+                    showTimePicker = false
+                }) { Text("تأیید", color = Color(0xFF64B5F6)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("انصراف", color = Muted) }
+            }
+        )
+    }
 }
