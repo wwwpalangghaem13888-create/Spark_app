@@ -450,12 +450,12 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     },
                     onToggleTask = { task, completed ->
                         scope.launch {
-                            db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), date.toString())
+                            db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), LocalDate.now().toString())
                             SparkWidgetProvider.refreshAll(context)
                         }
                     }
                 )
-                3 -> Statistics(habits, allLogs, tasks, focusSessions)
+                3 -> Statistics(habits, allLogs, tasks + archivedTasks, taskHistory, focusSessions)
                 4 -> ProgressHub(todayHabits, allLogs, todayLogs, tasks, taskHistory, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
                 5 -> GoalsScreen(db.productivityDao(), tasks, habits)
                 6 -> FocusScreen(db.productivityDao())
@@ -642,14 +642,14 @@ private fun Statistics(
     habits: List<HabitEntity>,
     logs: List<HabitLogEntity>,
     tasks: List<TaskEntity>,
+    taskHistory: List<TaskCompletionEntity>,
     focusSessions: List<FocusSessionEntity>
 ) {
     val today = LocalDate.now()
     var periodDays by remember { mutableIntStateOf(7) }
-    val report = remember(habits, logs, tasks, focusSessions, periodDays, today) {
-        buildAnalyticsReport(habits, logs, tasks, focusSessions, today.minusDays(periodDays.toLong() - 1), today)
+    val report = remember(habits, logs, tasks, taskHistory, focusSessions, periodDays, today) {
+        buildAnalyticsReport(habits, logs, tasks, taskHistory, focusSessions, today.minusDays(periodDays.toLong() - 1), today)
     }
-    val taskRate = if (tasks.isEmpty()) null else (report.completedTasks.toFloat() / tasks.size).coerceIn(0f, 1f)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Text("مرکز تحلیل Spark", color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -673,9 +673,9 @@ private fun Statistics(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetricCard("وظایف تکمیل‌شده", report.completedTasks.toString(), Modifier.weight(1f))
+                MetricCard("تکمیل وظایف", report.completedTasks.toString(), Modifier.weight(1f))
                 MetricCard("زمان تمرکز", (report.focusSeconds / 60).toString() + " دقیقه", Modifier.weight(1f))
-                MetricCard("نرخ وظایف", taskRate?.let { (it * 100).roundToInt().toString() + "٪" } ?: "بدون داده", Modifier.weight(1f))
+                MetricCard("وظایف باز", tasks.count { !it.completed && !it.archived }.toString(), Modifier.weight(1f))
             }
         }
         item {
@@ -701,7 +701,12 @@ private fun Statistics(
                 Text("روز پربازده: " + (report.bestDay?.toString() ?: "دادهٔ کافی نیست"), color = Muted, fontSize = 12.sp)
                 val bestCategory = report.categoryTaskCounts.maxByOrNull { it.value }
                 Text("دستهٔ پرتکرار: " + (bestCategory?.key ?: "دادهٔ کافی نیست"), color = Muted, fontSize = 12.sp)
-                Text("جلسات تمرکز: " + focusSessions.count { it.completed && it.endedAt != null }, color = Muted, fontSize = 12.sp)
+                val periodSessions = focusSessions.count { session ->
+                    session.completed && session.endedAt != null &&
+                        Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate()
+                            .let { it >= report.startDate && it <= report.endDate }
+                }
+                Text("جلسات تمرکز در این دوره: " + periodSessions, color = Muted, fontSize = 12.sp)
                 Text("وظایف فعال: " + tasks.count { !it.completed && !it.archived }, color = Muted, fontSize = 12.sp)
                 Text("وظایف تکمیل‌شده در بازه: " + report.completedTasks, color = Muted, fontSize = 12.sp)
                 if (report.days.all { it.completedHabits + it.completedTasks == 0 && it.focusSeconds == 0L }) {
@@ -803,7 +808,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                             Text(name, color = if (unlocked) White else Muted, fontWeight = FontWeight.SemiBold)
                             Text("$required ثبت موفق موردنیاز", color = Muted, fontSize = 10.sp)
                         }
-                        Text(if (unlocked) "باز شد" else "${completedLogs.size}/$required", color = if (unlocked) Cyan else Muted, fontSize = 11.sp)
+                        Text(if (unlocked) "باز شد" else "${totalActivities}/$required", color = if (unlocked) Cyan else Muted, fontSize = 11.sp)
                     }
                 }
             }

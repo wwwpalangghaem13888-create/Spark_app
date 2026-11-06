@@ -128,11 +128,12 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
     val activeSession = session
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var lastSessionCompleted by remember { mutableStateOf(false) }
     var selectedMinutes by remember { mutableLongStateOf(25L) }
     var selectedMode by remember { mutableStateOf("FOCUS") }
     var customMinutes by remember { mutableStateOf("25") }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(session?.id, session?.pausedAt) {
+    LaunchedEffect(activeSession?.id, activeSession?.pausedAt) {
         while (true) { now = System.currentTimeMillis(); delay(1000) }
     }
     val remaining = activeSession?.let { focusRemainingSeconds(it, now) }
@@ -145,11 +146,32 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
         else (1f - (remaining ?: 0L).toFloat() / it.plannedDurationSeconds).coerceIn(0f, 1f)
     } ?: 0f
 
+    LaunchedEffect(activeSession?.id, remaining, activeSession?.pausedAt) {
+        val current = activeSession
+        if (current != null && current.mode != "STOPWATCH" &&
+            current.pausedAt == null && remaining == 0L
+        ) {
+            val changed = dao.finishFocusSession(
+                current.id,
+                current.plannedDurationSeconds,
+                true,
+                System.currentTimeMillis()
+            )
+            if (changed > 0) {
+                dao.disableRemindersForOwner("FOCUS", current.id)
+                lastSessionCompleted = true
+            }
+        }
+    }
+
     Column(modifier = modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Text("Spark Focus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("جلسه با زمان واقعی ذخیره می‌شود؛ بستن برنامه تایمر را صفر نمی‌کند.", style = MaterialTheme.typography.bodySmall)
         if (activeSession == null) {
+            if (lastSessionCompleted) {
+                Text("جلسه با موفقیت ثبت شد.", color = MaterialTheme.colorScheme.primary)
+            }
             Text("نوع جلسه")
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 listOf("FOCUS" to "تمرکز", "SHORT_BREAK" to "استراحت کوتاه", "LONG_BREAK" to "استراحت بلند", "STOPWATCH" to "کرنومتر").forEach { (key, label) ->
@@ -169,7 +191,7 @@ fun FocusScreen(dao: ProductivityDao, modifier: Modifier = Modifier) {
                     customMinutes.toLongOrNull()?.takeIf { n -> n in 1L..180L }?.let { n -> selectedMinutes = n }
                 }, label = { Text("مدت دلخواه (۱ تا ۱۸۰ دقیقه)") }, singleLine = true)
             }
-            Button(onClick = { scope.launch {
+            Button(onClick = { lastSessionCompleted = false; scope.launch {
                 val start = System.currentTimeMillis()
                 val planned = if (selectedMode == "STOPWATCH") 31_536_000L else selectedMinutes * 60
                 val id = dao.insertFocusSession(FocusSessionEntity(mode = selectedMode, startedAt = start, plannedDurationSeconds = planned))

@@ -111,7 +111,7 @@ class ProductivitySystemsTest {
             TaskEntity(id = 3, title = "Later", category = "School", completed = false)
         )
         val sessions = listOf(FocusSessionEntity(startedAt = taskTime, plannedDurationSeconds = 1500, actualDurationSeconds = 900, completed = true))
-        val report = buildAnalyticsReport(habits, logs, tasks, sessions, start, end, java.time.ZoneId.of("UTC"))
+        val report = buildAnalyticsReport(habits, logs, tasks, emptyList(), sessions, start, end, java.time.ZoneId.of("UTC"))
 
         assertEquals(1, report.completedHabits)
         assertEquals(2, report.scheduledHabitOpportunities)
@@ -120,6 +120,38 @@ class ProductivitySystemsTest {
         assertEquals(start, report.bestDay)
         assertEquals(0.5f, report.habitCompletionRate, 0.0001f)
         assertEquals(1, report.categoryTaskCounts["School"])
+    }
+
+
+    @Test
+    fun analyticsUsesCompletionHistoryAfterTaskIsReopenedOrArchived() {
+        val date = LocalDate.parse("2026-11-06")
+        val completedAt = date.atTime(12, 0).atZone(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli()
+        val reopenedTask = TaskEntity(id = 42, title = "Write report", category = "Work", completed = false, archived = true)
+        val history = listOf(TaskCompletionEntity(
+            id = 8, taskId = 42, completed = true, activityDate = date.toString(), completedAt = completedAt
+        ))
+        val report = buildAnalyticsReport(
+            habits = emptyList(), logs = emptyList(), tasks = listOf(reopenedTask),
+            taskHistory = history, sessions = emptyList(), startDate = date, endDate = date,
+            zoneId = java.time.ZoneId.of("UTC")
+        )
+        assertEquals(1, report.completedTasks)
+        assertEquals(1, report.days.single().completedTasks)
+        assertEquals(1, report.categoryTaskCounts["Work"])
+    }
+
+    @Test
+    fun analyticsKeepsLegacyCurrentlyCompletedTaskWithoutHistory() {
+        val date = LocalDate.parse("2026-11-06")
+        val completedAt = date.atTime(12, 0).atZone(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli()
+        val report = buildAnalyticsReport(
+            habits = emptyList(), logs = emptyList(),
+            tasks = listOf(TaskEntity(id = 43, title = "Legacy", completed = true, completedAt = completedAt)),
+            taskHistory = emptyList(), sessions = emptyList(), startDate = date, endDate = date,
+            zoneId = java.time.ZoneId.of("UTC")
+        )
+        assertEquals(1, report.completedTasks)
     }
 
     @Test(expected = IllegalArgumentException::class)

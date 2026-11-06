@@ -154,7 +154,6 @@ class SparkBootReceiver : BroadcastReceiver() {
                         SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build()
                 try {
                     db.productivityDao().getEnabledReminders()
-                        .filter { (it.snoozedUntil ?: it.triggerAt) > System.currentTimeMillis() }
                         .forEach { ReminderScheduler.schedule(context, it) }
                 } finally {
                     db.close()

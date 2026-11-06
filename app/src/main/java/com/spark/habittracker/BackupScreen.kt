@@ -65,7 +65,6 @@ fun BackupScreen(db: SparkDatabase, modifier: Modifier = Modifier) {
             status = try {
                 val count = SparkBackupManager.import(context, db, uri)
                 db.productivityDao().getEnabledReminders()
-                    .filter { (it.snoozedUntil ?: it.triggerAt) > System.currentTimeMillis() }
                     .forEach { ReminderScheduler.schedule(context, it) }
                 SparkWidgetProvider.refreshAll(context)
                 "بازیابی انجام شد. $count رکورد وارد یا به‌روزرسانی شد."

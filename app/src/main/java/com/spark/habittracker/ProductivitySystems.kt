@@ -201,8 +201,19 @@ interface ProductivityDao {
     @Query("SELECT habitId FROM goal_habit_links WHERE goalId = :goalId")
     suspend fun linkedHabitIds(goalId: Long): List<Long>
 
-    @Query("SELECT COUNT(*) FROM tasks WHERE id IN (SELECT taskId FROM goal_task_links WHERE goalId = :goalId) AND completed = 1 AND completedAt >= :startMillis AND completedAt <= :endMillis")
-    suspend fun completedLinkedTasks(goalId: Long, startMillis: Long, endMillis: Long): Int
+    @Query("""
+        SELECT COUNT(*) FROM (
+            SELECT h.taskId, h.activityDate
+            FROM task_completion_history AS h
+            INNER JOIN goal_task_links AS l ON l.taskId = h.taskId
+            WHERE l.goalId = :goalId
+              AND h.completed = 1
+              AND h.activityDate >= :startDate
+              AND h.activityDate <= :endDate
+            GROUP BY h.taskId, h.activityDate
+        ) AS completed_task_days
+    """)
+    suspend fun completedLinkedTasks(goalId: Long, startDate: String, endDate: String): Int
 
     @Query("SELECT COUNT(*) FROM habit_logs WHERE habitId IN (SELECT habitId FROM goal_habit_links WHERE goalId = :goalId) AND isCompleted = 1 AND date >= :startDate AND date <= :endDate")
     suspend fun completedLinkedHabits(goalId: Long, startDate: String, endDate: String): Int
@@ -384,6 +395,7 @@ internal fun buildAnalyticsReport(
     habits: List<HabitEntity>,
     logs: List<HabitLogEntity>,
     tasks: List<TaskEntity>,
+    taskHistory: List<TaskCompletionEntity>,
     sessions: List<FocusSessionEntity>,
     startDate: LocalDate,
     endDate: LocalDate,
@@ -391,12 +403,24 @@ internal fun buildAnalyticsReport(
 ): AnalyticsReport {
     require(!endDate.isBefore(startDate)) { "End date must not be before start date." }
     val activeHabits = habits.filter { it.isEnabled }
-    val completedLogKeys = logs.asSequence()
-        .filter { it.isCompleted }
-        .mapNotNull { log ->
-            runCatching { log.habitId to LocalDate.parse(log.date) }.getOrNull()
-        }.filter { (_, day) -> day >= startDate && day <= endDate }
-        .toSet()
+    val completedLogKeys = logs.asSequence().filter { it.isCompleted }
+        .mapNotNull { log -> runCatching { log.habitId to LocalDate.parse(log.date) }.getOrNull() }
+        .filter { (_, day) -> day >= startDate && day <= endDate }.toSet()
+
+    // History survives tasks being reopened or archived. Current task state is a legacy fallback.
+    val completedTaskKeys = buildSet<Pair<Long, LocalDate>> {
+        taskHistory.asSequence().filter { it.completed }.forEach { event ->
+            runCatching { event.taskId to LocalDate.parse(event.activityDate) }.getOrNull()
+                ?.takeIf { it.second >= startDate && it.second <= endDate }?.let(::add)
+        }
+        tasks.asSequence().filter { it.completed }.forEach { task ->
+            task.completedAt?.let { at ->
+                val day = java.time.Instant.ofEpochMilli(at).atZone(zoneId).toLocalDate()
+                if (day >= startDate && day <= endDate) add(task.id to day)
+            }
+        }
+    }
+    val categoryByTaskId = tasks.associate { it.id to it.category.ifBlank { "عمومی" } }
     val daily = generateSequence(startDate) { current ->
         if (current < endDate) current.plusDays(1) else null
     }.map { day ->
@@ -405,24 +429,12 @@ internal fun buildAnalyticsReport(
             !day.isBefore(created) && day.dayOfWeek.name in habit.scheduledDays.split(",").map(String::trim)
         }
         val completedHabits = scheduled.count { (it.id to day) in completedLogKeys }
-        val completedTasks = tasks.count { task ->
-            task.completed && task.completedAt?.let { at ->
-                val taskDay = java.time.Instant.ofEpochMilli(at).atZone(zoneId).toLocalDate()
-                taskDay == day
-            } == true
-        }
+        val completedTasks = completedTaskKeys.count { it.second == day }
         val focus = sessions.filter { session ->
-            val sessionDay = java.time.Instant.ofEpochMilli(session.startedAt).atZone(zoneId).toLocalDate()
-            sessionDay == day
+            java.time.Instant.ofEpochMilli(session.startedAt).atZone(zoneId).toLocalDate() == day
         }.sumOf { it.actualDurationSeconds.coerceAtLeast(0) }
         AnalyticsDay(day, completedHabits, scheduled.size, completedTasks, focus)
     }.toList()
-    val completedTaskEntities = tasks.filter { task ->
-        task.completed && task.completedAt?.let { at ->
-            val day = java.time.Instant.ofEpochMilli(at).atZone(zoneId).toLocalDate()
-            day >= startDate && day <= endDate
-        } == true
-    }
     val focusSeconds = daily.sumOf { it.focusSeconds }
     val bestDay = daily.maxByOrNull { it.completedHabits + it.completedTasks + (it.focusSeconds / 60).toInt() }
         ?.takeIf { it.completedHabits + it.completedTasks + it.focusSeconds > 0 }?.date
@@ -431,11 +443,13 @@ internal fun buildAnalyticsReport(
         endDate = endDate,
         completedHabits = daily.sumOf { it.completedHabits },
         scheduledHabitOpportunities = daily.sumOf { it.scheduledHabits },
-        completedTasks = completedTaskEntities.size,
+        completedTasks = completedTaskKeys.size,
         focusSeconds = focusSeconds,
         bestDay = bestDay,
         days = daily,
-        categoryTaskCounts = completedTaskEntities.groupingBy { it.category.ifBlank { "عمومی" } }.eachCount()
+        categoryTaskCounts = completedTaskKeys.groupingBy { (taskId, _) ->
+            categoryByTaskId[taskId] ?: "عمومی"
+        }.eachCount()
     )
 }
 
@@ -446,18 +460,12 @@ data class GoalProgress(
 )
 
 class GoalProgressRepository(private val dao: ProductivityDao) {
-    suspend fun progress(
-        goal: GoalEntity,
-        startDate: LocalDate,
-        endDate: LocalDate,
-        zoneId: ZoneId = ZoneId.systemDefault()
-    ): GoalProgress {
+    suspend fun progress(goal: GoalEntity, startDate: LocalDate, endDate: LocalDate): GoalProgress {
         require(!endDate.isBefore(startDate))
-        val startMillis = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
-        val endMillis = endDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
-        val tasks = dao.completedLinkedTasks(goal.id, startMillis, endMillis)
+        val tasks = dao.completedLinkedTasks(goal.id, startDate.toString(), endDate.toString())
         val habits = dao.completedLinkedHabits(goal.id, startDate.toString(), endDate.toString())
         val completed = tasks + habits
         return GoalProgress(completed, goal.targetValue, goalProgressRatio(completed, goal.targetValue))
     }
+}
 }

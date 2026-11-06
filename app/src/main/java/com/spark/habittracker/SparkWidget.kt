@@ -40,7 +40,7 @@ class SparkWidgetProvider : AppWidgetProvider() {
                 try {
                     val tasks = db.taskDao().getWidgetTasks()
                     val views = RemoteViews(context.packageName, R.layout.spark_widget)
-                    views.setTextViewText(R.id.widget_title, "SPARK • وظایف امروز")
+                    views.setTextViewText(R.id.widget_title, "SPARK • وظایف مهم")
                     val rowIds = listOf(R.id.widget_task_1, R.id.widget_task_2, R.id.widget_task_3)
                     rowIds.forEachIndexed { index, viewId ->
                         val task = tasks.getOrNull(index)
