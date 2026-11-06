@@ -37,4 +37,35 @@ class ProductivityRepository internal constructor(private val dao: ProductivityD
     fun observeActiveFocusSession(): Flow<FocusSessionEntity?> = dao.observeActiveFocusSession()
     suspend fun recordTaskCompletion(taskId: Long, completed: Boolean, now: Long, date: LocalDate): Boolean =
         dao.recordTaskCompletion(taskId, completed, now, date.toString())
+
+    // Goal operations are exposed through this boundary; Compose never receives a Room DAO.
+    fun observeGoals(): Flow<List<GoalEntity>> = dao.observeGoals()
+    suspend fun linkedTaskIds(goalId: Long): List<Long> = dao.linkedTaskIds(goalId)
+    suspend fun linkedHabitIds(goalId: Long): List<Long> = dao.linkedHabitIds(goalId)
+    suspend fun completedLinkedTasks(goalId: Long, startDate: String, endDate: String, startMillis: Long, endMillis: Long): Int =
+        dao.completedLinkedTasks(goalId, startDate, endDate, startMillis, endMillis)
+    suspend fun completedLinkedHabits(goalId: Long, startDate: String, endDate: String): Int =
+        dao.completedLinkedHabits(goalId, startDate, endDate)
+    suspend fun archiveGoal(goalId: Long, updatedAt: Long): Int = dao.archiveGoal(goalId, updatedAt)
+    suspend fun createGoal(goal: GoalEntity, taskIds: Set<Long>, habitIds: Set<Long>): Long {
+        require(goal.title.isNotBlank()) { "Goal title must not be blank." }
+        require(goal.targetValue.isFinite() && goal.targetValue > 0.0) { "Goal target must be positive." }
+        val id = dao.insertGoal(goal)
+        taskIds.forEach { dao.linkTaskToGoal(GoalTaskLinkEntity(id, it)) }
+        habitIds.forEach { dao.linkHabitToGoal(GoalHabitLinkEntity(id, it)) }
+        return id
+    }
+
+    // Focus operations stay behind the same repository boundary.
+    fun observeActiveFocusSession(): Flow<FocusSessionEntity?> = dao.observeActiveFocusSession()
+    suspend fun finishFocusSession(id: Long, actualSeconds: Long, completed: Boolean, endedAt: Long): Int =
+        dao.finishFocusSession(id, actualSeconds, completed, endedAt)
+    suspend fun disableRemindersForOwner(ownerType: String, ownerId: Long): Int =
+        dao.disableRemindersForOwner(ownerType, ownerId)
+    suspend fun insertFocusSession(session: FocusSessionEntity): Long = dao.insertFocusSession(session)
+    suspend fun insertReminder(reminder: ReminderEntity): Long = dao.insertReminder(reminder)
+    suspend fun updateFocusPause(id: Long, pausedAt: Long?, pausedSeconds: Long): Int =
+        dao.updateFocusPause(id, pausedAt, pausedSeconds)
+    suspend fun deleteRemindersForOwner(ownerType: String, ownerId: Long): Int =
+        dao.deleteRemindersForOwner(ownerType, ownerId)
 }
