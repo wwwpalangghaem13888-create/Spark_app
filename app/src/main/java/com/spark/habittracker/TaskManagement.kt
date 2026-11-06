@@ -71,6 +71,9 @@ interface TaskDao {
 
     @Query("SELECT COUNT(*) FROM tasks WHERE archived = 0 AND completed = 0 AND dueDate < :today")
     fun observeOverdueCount(today: String): Flow<Int>
+
+    @Query("SELECT * FROM tasks WHERE archived = 0 AND completed = 0 ORDER BY CASE WHEN dueDate IS NULL THEN 1 ELSE 0 END, dueDate ASC, priority DESC LIMIT 3")
+    suspend fun getWidgetTasks(): List<TaskEntity>
 }
 
 /** Small repository boundary so UI code does not own task persistence rules. */
