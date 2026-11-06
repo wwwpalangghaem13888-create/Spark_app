@@ -169,14 +169,39 @@ class ReminderReceiver : BroadcastReceiver() {
 
 class SparkBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val supportedActions = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_DATE_CHANGED
+        )
+        if (intent.action !in supportedActions) return
+
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 val db = SparkDatabaseFactory.create(context)
                 try {
-                    db.productivityDao().getEnabledReminders()
-                        .forEach { ReminderScheduler.schedule(context, it) }
+                    val now = System.currentTimeMillis()
+                    db.productivityDao().getEnabledReminders().forEach { reminder ->
+                        val isSnoozed = reminder.snoozedUntil?.let { it > now } == true
+                        if (reminder.ownerType == "HABIT" && !isSnoozed) {
+                            val habit = db.habitDao().findHabit(reminder.ownerId)
+                            val nextTrigger = habit?.let { nextHabitReminder(it, now) }
+                            if (nextTrigger != null) {
+                                db.productivityDao().updateReminderTrigger(reminder.id, nextTrigger)
+                                ReminderScheduler.schedule(
+                                    context,
+                                    reminder.copy(triggerAt = nextTrigger, snoozedUntil = null)
+                                )
+                            } else {
+                                db.productivityDao().setReminderEnabled(reminder.id, false)
+                                ReminderScheduler.cancel(context, reminder.id)
+                            }
+                        } else {
+                            ReminderScheduler.schedule(context, reminder)
+                        }
+                    }
                 } finally {
                     db.close()
                 }
