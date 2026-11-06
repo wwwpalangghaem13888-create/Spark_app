@@ -288,7 +288,7 @@ abstract class SparkDatabase : RoomDatabase() {
 }
 
 class MainActivity : ComponentActivity() {
-    private val db by lazy { Room.databaseBuilder(applicationContext, SparkDatabase::class.java, "spark_tracker.db").addMigrations(SparkDatabase.MIGRATION_1_2, SparkDatabase.MIGRATION_2_3, SparkDatabase.MIGRATION_3_4, SparkDatabase.MIGRATION_4_5, SparkDatabase.MIGRATION_5_6).build() }
+    private val db by lazy { SparkDatabaseFactory.create(applicationContext) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ReminderScheduler.ensureChannel(this)
