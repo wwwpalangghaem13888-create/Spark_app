@@ -144,6 +144,24 @@ interface ProductivityDao {
     @Query("SELECT * FROM goals WHERE archived = 0 ORDER BY targetDate IS NULL, targetDate")
     fun observeGoals(): Flow<List<GoalEntity>>
 
+    @Query("SELECT * FROM goals")
+    suspend fun getAllGoals(): List<GoalEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreGoals(items: List<GoalEntity>)
+
+    @Query("SELECT * FROM goal_task_links")
+    suspend fun getAllGoalTaskLinks(): List<GoalTaskLinkEntity>
+
+    @Query("SELECT * FROM goal_habit_links")
+    suspend fun getAllGoalHabitLinks(): List<GoalHabitLinkEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreGoalTaskLinks(items: List<GoalTaskLinkEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreGoalHabitLinks(items: List<GoalHabitLinkEntity>)
+
     @Query("SELECT * FROM focus_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
     fun observeActiveFocusSession(): Flow<FocusSessionEntity?>
 
@@ -183,6 +201,12 @@ interface ProductivityDao {
     @Query("SELECT * FROM focus_sessions ORDER BY startedAt DESC")
     fun observeFocusSessions(): Flow<List<FocusSessionEntity>>
 
+    @Query("SELECT * FROM focus_sessions")
+    suspend fun getAllFocusSessions(): List<FocusSessionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreFocusSessions(items: List<FocusSessionEntity>)
+
     @Query("UPDATE focus_sessions SET pausedAt = :pausedAt, accumulatedPausedSeconds = :accumulatedPausedSeconds WHERE id = :id")
     suspend fun updateFocusPause(id: Long, pausedAt: Long?, accumulatedPausedSeconds: Long): Int
 
@@ -197,6 +221,12 @@ interface ProductivityDao {
 
     @Query("SELECT * FROM reminders WHERE enabled = 1")
     suspend fun getEnabledReminders(): List<ReminderEntity>
+
+    @Query("SELECT * FROM reminders")
+    suspend fun getAllReminders(): List<ReminderEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreReminders(items: List<ReminderEntity>)
 
     @Query("SELECT * FROM reminders WHERE enabled = 1 AND triggerAt <= :now AND (snoozedUntil IS NULL OR snoozedUntil <= :now) ORDER BY triggerAt")
     fun observeDueReminders(now: Long): Flow<List<ReminderEntity>>
