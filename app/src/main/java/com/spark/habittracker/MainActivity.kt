@@ -404,10 +404,27 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                         SparkWidgetProvider.refreshAll(context)
                     } },
                     onEdit = { editingTask = it; taskEditorOpen = true },
-                    onArchive = { task -> scope.launch { taskRepository.archive(task.id); SparkWidgetProvider.refreshAll(context) } },
-                    onDelete = { task -> scope.launch { taskRepository.deletePermanently(task.id); SparkWidgetProvider.refreshAll(context) } },
+                    onArchive = { task -> scope.launch {
+                        taskRepository.archive(task.id)
+                        db.productivityDao().disableRemindersForOwner("TASK", task.id)
+                        SparkWidgetProvider.refreshAll(context)
+                    } },
+                    onDelete = { task -> scope.launch {
+                        db.productivityDao().deleteRemindersForOwner("TASK", task.id)
+                        taskRepository.deletePermanently(task.id)
+                        SparkWidgetProvider.refreshAll(context)
+                    } },
                     onDuplicate = { task -> scope.launch { taskRepository.duplicate(task); SparkWidgetProvider.refreshAll(context) } },
-                    onRestore = { task -> scope.launch { taskRepository.restore(task.id); SparkWidgetProvider.refreshAll(context) } },
+                    onRestore = { task -> scope.launch {
+                        taskRepository.restore(task.id)
+                        task.reminderAt?.takeIf { it > System.currentTimeMillis() }?.let { triggerAt ->
+                            db.productivityDao().deleteRemindersForOwner("TASK", task.id)
+                            val reminder = ReminderEntity(ownerType = "TASK", ownerId = task.id, triggerAt = triggerAt)
+                            val reminderId = db.productivityDao().insertReminder(reminder)
+                            ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                        }
+                        SparkWidgetProvider.refreshAll(context)
+                    } },
                     archivedTasks = archivedTasks,
                     productivityDao = db.productivityDao()
                 )
@@ -425,6 +442,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                     onToggleTask = { task, completed ->
                         scope.launch {
                             db.productivityDao().recordTaskCompletion(task.id, completed, System.currentTimeMillis(), date.toString())
+                            SparkWidgetProvider.refreshAll(context)
                         }
                     }
                 )
