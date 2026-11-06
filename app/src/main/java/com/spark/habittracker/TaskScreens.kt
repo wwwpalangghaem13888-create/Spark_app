@@ -287,8 +287,11 @@ fun TaskEditorDialog(
             }
         )
     }
-    var repeatTotalCount by remember(initial) {
-        mutableIntStateOf(((initial?.repeatRemainingCount ?: 2) + if (initial?.repeatRemainingCount != null) 1 else 0).coerceIn(2, 1000))
+    var repeatTotalCountText by remember(initial) {
+        mutableStateOf(
+            ((initial?.repeatRemainingCount ?: 2) + if (initial?.repeatRemainingCount != null) 1 else 0)
+                .coerceIn(if (initial?.repeatRemainingCount == 0) 1 else 2, 1000).toString()
+        )
     }
     var reminderEnabled by remember(initial) { mutableStateOf(initial?.reminderAt != null) }
     val weekdays = listOf(
@@ -369,13 +372,13 @@ fun TaskEditorDialog(
                 }
                 if (taskKind == "LIMITED") {
                     OutlinedTextField(
-                        value = repeatTotalCount.toString(),
+                        value = repeatTotalCountText,
                         onValueChange = { value ->
-                            repeatTotalCount = value.filter(Char::isDigit).toIntOrNull()?.coerceIn(2, 1000) ?: 2
+                            repeatTotalCountText = value.filter(Char::isDigit).take(4)
                             error = null
                         },
                         label = { Text(localizedText(language, "چند بار در مجموع؟", "Total number of occurrences", "كم مرة بالمجموع؟")) },
-                        supportingText = { Text(localizedText(language, "شامل همین نوبت؛ حداقل ۲ بار", "Including this first one; at least 2", "بما فيها المرة الأولى؛ مرتان على الأقل")) },
+                        supportingText = { Text(localizedText(language, "شامل همین نوبت؛ حداقل ۲ بار برای کار جدید", "Including this first one; at least 2 for a new task", "بما فيها المرة الأولى؛ مرتان على الأقل للعمل الجديد")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -493,8 +496,12 @@ fun TaskEditorDialog(
                         require(!recurring || recurrence != "WEEKLY" || weeklyDays.isNotEmpty()) {
                             localizedText(language, "حداقل یک روز انتخاب کن.", "Select at least one day.", "اختر يوماً واحداً على الأقل.")
                         }
-                        require(taskKind != "LIMITED" || repeatTotalCount in 2..1000) {
-                            localizedText(language, "تعداد تکرار باید بین ۲ تا ۱۰۰۰ باشد.", "Repeat count must be between 2 and 1000.", "يجب أن يكون عدد التكرارات بين 2 و1000.")
+                        val repeatTotalCount = repeatTotalCountText.toIntOrNull()
+                        require(
+                            taskKind != "LIMITED" ||
+                                (repeatTotalCount != null && repeatTotalCount in (if (initial?.repeatRemainingCount == 0) 1..1000 else 2..1000))
+                        ) {
+                            localizedText(language, "تعداد تکرار معتبر نیست.", "Enter a valid repeat count.", "أدخل عدداً صالحاً للتكرار.")
                         }
                         val rule = if (!recurring) null else when (recurrence) {
                             "WEEKLY" -> "WEEKLY:" + weekdays.filter { it.first in weeklyDays }.joinToString(",") { it.first }
@@ -519,7 +526,7 @@ fun TaskEditorDialog(
                                 archived = initial?.archived ?: false,
                                 createdAt = initial?.createdAt ?: System.currentTimeMillis(),
                                 updatedAt = System.currentTimeMillis(),
-                                repeatRemainingCount = if (taskKind == "LIMITED") repeatTotalCount - 1 else null
+                                repeatRemainingCount = if (taskKind == "LIMITED") (repeatTotalCount!! - 1) else null
                             )
                         )
                     } catch (exception: IllegalArgumentException) {
