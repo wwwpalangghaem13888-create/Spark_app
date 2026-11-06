@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
         }
         setContent {
-            val settings by db.habitDao().observeSettings().collectAsState(initial = null)
+            val settings by container.habitRepository.observeSettings().collectAsState(initial = null)
             SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(container, sparkViewModel) }
         }
     }
@@ -205,7 +205,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                 1 -> TaskListScreen(
                     tasks = tasks,
                     onToggle = { task, completed -> scope.launch {
-                        recordTaskCompletionAndSyncReminder(context, db, task.id, completed)
+                        recordTaskCompletionAndSyncReminder(context, container.taskRepository, productivityRepository, task.id, completed)
                     } },
                     onEdit = { editingTask = it; taskEditorOpen = true },
                     onArchive = { task -> scope.launch {
@@ -248,7 +248,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                     },
                     onToggleTask = { task, completed ->
                         scope.launch {
-                            recordTaskCompletionAndSyncReminder(context, db, task.id, completed)
+                            recordTaskCompletionAndSyncReminder(context, container.taskRepository, productivityRepository, task.id, completed)
                         }
                     }
                 )
@@ -305,21 +305,19 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
 
 private suspend fun recordTaskCompletionAndSyncReminder(
     context: android.content.Context,
-    db: SparkDatabase,
+    taskRepository: TaskRepository,
+    productivityRepository: ProductivityRepository,
     taskId: Long,
     completed: Boolean
 ) {
     val now = System.currentTimeMillis()
-    val dao = db.productivityDao()
-    val changed = dao.recordTaskCompletion(taskId, completed, now, LocalDate.now().toString())
+    val changed = productivityRepository.recordTaskCompletion(taskId, completed, now, LocalDate.now())
     if (changed && !completed) {
-        // A completion disables its one-shot reminder. Reopening the task must
-        // recreate the alarm if its configured reminder time is still in the future.
-        dao.deleteRemindersForOwner("TASK", taskId)
-        val task = db.taskDao().findById(taskId)
-        task?.let { taskReminderTriggerAt(it, now) }?.let { triggerAt ->
+        // Reopening a task recreates its one-shot reminder only if its time is still in the future.
+        productivityRepository.deleteRemindersForOwner("TASK", taskId)
+        taskRepository.findById(taskId)?.let { taskReminderTriggerAt(it, now) }?.let { triggerAt ->
             val reminder = ReminderEntity(ownerType = "TASK", ownerId = taskId, triggerAt = triggerAt)
-            val reminderId = dao.insertReminder(reminder)
+            val reminderId = productivityRepository.insertReminder(reminder)
             ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
         }
     }
