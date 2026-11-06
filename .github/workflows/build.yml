@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Test and build Android variants
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,15 +31,23 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.5"
+          gradle-version: "8.11.1"
 
-      - name: Build APK
-        run: gradle testDebugUnitTest assembleDebug --stacktrace
+      - name: Run unit tests and assemble debug and release APKs
+        run: gradle testDebugUnitTest assembleDebug assembleRelease --stacktrace
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: Spark-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release APK (unsigned)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Spark-release-unsigned-apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 14
