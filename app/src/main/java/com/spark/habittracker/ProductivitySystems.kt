@@ -135,6 +135,9 @@ interface ProductivityDao {
     @Query("SELECT * FROM task_completion_history WHERE taskId = :taskId ORDER BY completedAt DESC")
     fun observeTaskHistory(taskId: Long): Flow<List<TaskCompletionEntity>>
 
+    @Query("SELECT * FROM task_completion_history ORDER BY completedAt DESC")
+    fun observeAllTaskHistory(): Flow<List<TaskCompletionEntity>>
+
     @Query("SELECT * FROM task_completion_history")
     suspend fun getAllTaskHistory(): List<TaskCompletionEntity>
 
