@@ -342,6 +342,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
     val taskRepository = remember(db) { TaskRepository(db.taskDao()) }
     val tasks by taskRepository.observeActiveTasks().collectAsState(initial = emptyList())
     val archivedTasks by db.taskDao().observeArchivedTasks().collectAsState(initial = emptyList())
+    val focusSessions by db.productivityDao().observeFocusSessions().collectAsState(initial = emptyList())
     val habits by dao.observeHabits().collectAsState(initial = emptyList())
     val logs by remember(date) { dao.observeLogs(date.toString()) }.collectAsState(initial = emptyList())
     val todayLogs by remember { dao.observeLogs(LocalDate.now().toString()) }.collectAsState(initial = emptyList())
@@ -425,7 +426,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                         }
                     }
                 )
-                3 -> Statistics(habits, allLogs)
+                3 -> Statistics(habits, allLogs, tasks, focusSessions)
                 4 -> ProgressHub(todayHabits, allLogs, todayLogs, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
                 5 -> GoalsScreen(db.productivityDao(), tasks)
                 6 -> FocusScreen(db.productivityDao())
@@ -578,64 +579,82 @@ private fun History(date: LocalDate, changeDate: (LocalDate) -> Unit, habits: Li
 }
 
 @Composable
-private fun Statistics(habits: List<HabitEntity>, logs: List<HabitLogEntity>) {
+private fun Statistics(
+    habits: List<HabitEntity>,
+    logs: List<HabitLogEntity>,
+    tasks: List<TaskEntity>,
+    focusSessions: List<FocusSessionEntity>
+) {
     val today = LocalDate.now()
-    val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
-    val byDate = logs.filter { it.isCompleted }.groupBy { it.date }
-    val eligibleHabits = habits.filter { it.isEnabled }
-    val completed = logs.count { log ->
-        log.isCompleted && eligibleHabits.any { habit ->
-            habit.id == log.habitId && runCatching {
-                val day = LocalDate.parse(log.date)
-                day in days &&
-                    !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-                    day.dayOfWeek.name in habit.scheduledDays.split(",")
-            }.getOrDefault(false)
-        }
+    var periodDays by remember { mutableIntStateOf(7) }
+    val report = remember(habits, logs, tasks, focusSessions, periodDays, today) {
+        buildAnalyticsReport(habits, logs, tasks, focusSessions, today.minusDays(periodDays.toLong() - 1), today)
     }
-    val possible = eligibleHabits.sumOf { habit ->
-        days.count { day ->
-            !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-                day.dayOfWeek.name in habit.scheduledDays.split(",")
-        }
-    }
-    val rate = (calculateCompletionRate(completed, possible) * 100f).roundToInt()
+    val taskRate = if (tasks.isEmpty()) null else (report.completedTasks.toFloat() / tasks.size).coerceIn(0f, 1f)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(18.dp)) {
-            Text("عملکرد هفت روز اخیر", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Text("$rate٪", color = Violet, fontSize = 32.sp, fontWeight = FontWeight.Black)
-            Text("نسبت ثبت‌های موفق به تعداد عادت‌ها در این هفته", color = Muted, fontSize = 11.sp)
-        } }
-        item { Text("روند روزانه", color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
-        item { Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-            days.forEach { day ->
-                val count = byDate[day.toString()]?.count { log ->
-                    eligibleHabits.any { habit ->
-                        habit.id == log.habitId &&
-                            !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-                            day.dayOfWeek.name in habit.scheduledDays.split(",")
-                    }
-                } ?: 0
-                val expected = eligibleHabits.count { habit ->
-                    !day.isBefore(Instant.ofEpochMilli(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()) &&
-                        day.dayOfWeek.name in habit.scheduledDays.split(",")
-                }
-                val ratio = calculateCompletionRate(count, expected)
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Box(Modifier.width(24.dp).height(100.dp), contentAlignment = Alignment.BottomCenter) { Box(Modifier.fillMaxWidth().fillMaxHeight(ratio).clip(RoundedCornerShape(8.dp)).background(Violet)) }
-                    Text(day.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale("fa")), color = Muted, fontSize = 10.sp)
+        item {
+            Text("مرکز تحلیل Spark", color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("گزارش‌ها از سوابق ذخیره‌شده ساخته می‌شوند.", color = Muted, fontSize = 11.sp)
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                listOf(7 to "۷ روز", 30 to "۳۰ روز", 90 to "۹۰ روز").forEach { (days, label) ->
+                    FilterChip(selected = periodDays == days, onClick = { periodDays = days }, label = { Text(label) })
                 }
             }
-        } }
-        item { Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
-            Text("جمع‌بندی", color = White, fontWeight = FontWeight.Bold)
-            Text("تعداد عادت‌ها: ${habits.size}", color = Muted, fontSize = 13.sp)
-            Text("ثبت‌های موفق در این هفته: $completed", color = Muted, fontSize = 13.sp)
-            val monthStart = today.withDayOfMonth(1)
-            val monthlyCount = logs.count { it.isCompleted && runCatching { val d = LocalDate.parse(it.date); !d.isBefore(monthStart) && !d.isAfter(today) }.getOrDefault(false) }
-            Text("ثبت‌های موفق این ماه: $monthlyCount", color = Muted, fontSize = 13.sp)
-            if (habits.isEmpty()) Text("برای شروع آمار، یک عادت اضافه کن.", color = Violet, fontSize = 12.sp)
-        } }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).padding(18.dp)) {
+                Text("پایبندی به عادت‌ها", color = White, fontWeight = FontWeight.Bold)
+                Text(if (report.scheduledHabitOpportunities == 0) "دادهٔ کافی وجود ندارد" else (report.habitCompletionRate * 100).roundToInt().toString() + "٪",
+                    color = Violet, fontSize = 32.sp, fontWeight = FontWeight.Black)
+                Text(report.completedHabits.toString() + " تکمیل از " + report.scheduledHabitOpportunities + " فرصت برنامه‌ریزی‌شده",
+                    color = Muted, fontSize = 11.sp)
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricCard("وظایف تکمیل‌شده", report.completedTasks.toString(), Modifier.weight(1f))
+                MetricCard("زمان تمرکز", (report.focusSeconds / 60).toString() + " دقیقه", Modifier.weight(1f))
+            }
+        }
+        item {
+            Text("روند روزانه", color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                report.days.takeLast(14).forEach { day ->
+                    val total = day.completedHabits + day.completedTasks
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(day.date.dayOfMonth.toString() + "/" + day.date.monthValue, color = Muted, modifier = Modifier.width(42.dp), fontSize = 10.sp)
+                        Box(Modifier.weight(1f).height(9.dp).clip(CircleShape).background(PanelAlt)) {
+                            val ratio = (total / 10f).coerceIn(0f, 1f)
+                            Box(Modifier.fillMaxWidth(ratio).fillMaxSize().clip(CircleShape).background(Violet))
+                        }
+                        Text(total.toString(), color = White, modifier = Modifier.width(24.dp), fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
+                Text("جمع‌بندی دوره", color = White, fontWeight = FontWeight.Bold)
+                Text("روز پربازده: " + (report.bestDay?.toString() ?: "دادهٔ کافی نیست"), color = Muted, fontSize = 12.sp)
+                Text("جلسات تمرکز: " + focusSessions.count { it.completed && it.endedAt != null }, color = Muted, fontSize = 12.sp)
+                Text("وظایف فعال: " + tasks.count { !it.completed && !it.archived }, color = Muted, fontSize = 12.sp)
+                Text("وظایف تکمیل‌شده در بازه: " + report.completedTasks, color = Muted, fontSize = 12.sp)
+                if (report.days.all { it.completedHabits + it.completedTasks == 0 && it.focusSeconds == 0L }) {
+                    Text("در این بازه هنوز فعالیتی ثبت نشده است؛ نبود داده با عملکرد صفر یکسان نیست.", color = Violet, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(16.dp)).background(Panel).padding(14.dp)) {
+        Text(title, color = Muted, fontSize = 11.sp)
+        Text(value, color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
     }
 }
 
