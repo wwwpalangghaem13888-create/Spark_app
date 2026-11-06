@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -271,7 +272,22 @@ fun TaskEditorDialog(
     var startAt by remember(initial) { mutableStateOf(initial?.startAt?.let { formatTaskTime(it) }.orEmpty()) }
     var endAt by remember(initial) { mutableStateOf(initial?.endAt?.let { formatTaskTime(it) }.orEmpty()) }
     var reminderAt by remember(initial) { mutableStateOf(initial?.reminderAt?.let { formatTaskTime(it) }.orEmpty()) }
-    var recurrence by remember(initial) { mutableStateOf(initial?.recurrenceRule) }
+    var recurrence by remember(initial) { mutableStateOf(initial?.recurrenceRule?.substringBefore(":")) }
+    var reminderEnabled by remember(initial) { mutableStateOf(initial?.reminderAt != null) }
+    val weekdays = listOf(
+        "MONDAY" to "دوشنبه", "TUESDAY" to "سه‌شنبه", "WEDNESDAY" to "چهارشنبه",
+        "THURSDAY" to "پنجشنبه", "FRIDAY" to "جمعه", "SATURDAY" to "شنبه", "SUNDAY" to "یکشنبه"
+    )
+    var weeklyDays by remember(initial) {
+        mutableStateOf(
+            initial?.recurrenceRule?.substringAfter("WEEKLY:", "")
+                ?.takeIf { it.isNotBlank() }
+                ?.split(",")?.map { it.trim().uppercase() }?.toSet()
+                ?: if (initial?.recurrenceRule == "WEEKLY") {
+                    runCatching { LocalDate.parse(initial.dueDate).dayOfWeek.name }.getOrNull()?.let { setOf(it) } ?: emptySet()
+                } else emptySet()
+        )
+    }
     var tags by remember(initial) { mutableStateOf(initial?.tags.orEmpty()) }
     var priority by remember(initial) { mutableIntStateOf(initial?.priority ?: 1) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -287,12 +303,53 @@ fun TaskEditorDialog(
                 OutlinedTextField(dueDate, { dueDate = it; error = null }, label = { Text("مهلت (YYYY-MM-DD، اختیاری)") }, singleLine = true)
                 OutlinedTextField(startAt, { startAt = it; error = null }, label = { Text("زمان شروع (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
                 OutlinedTextField(endAt, { endAt = it; error = null }, label = { Text("زمان پایان (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
-                OutlinedTextField(reminderAt, { reminderAt = it; error = null }, label = { Text("زمان یادآوری (yyyy-MM-ddTHH:mm، اختیاری)") }, singleLine = true)
-                Text("تکرار")
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    listOf(null to "هیچ‌کدام", "DAILY" to "روزانه", "WEEKLY" to "هفتگی", "WEEKDAYS" to "روزهای کاری", "MONTHLY" to "ماهانه").forEach { (rule, label) ->
-                        FilterChip(selected = recurrence == rule, onClick = { recurrence = rule }, label = { Text(label) })
+                Text("نوع وظیفه")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = recurrence == null,
+                        onClick = { recurrence = null },
+                        label = { Text("یک‌باره") }
+                    )
+                    FilterChip(
+                        selected = recurrence != null,
+                        onClick = { if (recurrence == null) recurrence = "WEEKLY" },
+                        label = { Text("تکرارشونده") }
+                    )
+                }
+                if (recurrence != null) {
+                    Text("الگوی تکرار")
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf("WEEKLY" to "روزهای هفته", "DAILY" to "هر روز", "WEEKDAYS" to "روزهای کاری", "MONTHLY" to "ماهانه").forEach { (rule, label) ->
+                            FilterChip(selected = recurrence == rule, onClick = { recurrence = rule }, label = { Text(label) })
+                        }
                     }
+                    if (recurrence == "WEEKLY") {
+                        Text("در چه روزهایی تکرار شود؟")
+                        weekdays.chunked(4).forEach { group ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                group.forEach { (key, label) ->
+                                    FilterChip(
+                                        selected = key in weeklyDays,
+                                        onClick = { weeklyDays = if (key in weeklyDays) weeklyDays - key else weeklyDays + key },
+                                        label = { Text(label) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(checked = reminderEnabled, onCheckedChange = { reminderEnabled = it; if (!it) reminderAt = "" })
+                    Text("برای این وظیفه یادآوری لازم دارم")
+                }
+                if (reminderEnabled) {
+                    OutlinedTextField(
+                        reminderAt,
+                        { reminderAt = it; error = null },
+                        label = { Text("زمان یادآوری (yyyy-MM-ddTHH:mm)") },
+                        placeholder = { Text("خالی بماند = بدون ساعت یادآوری") },
+                        singleLine = true
+                    )
                 }
                 OutlinedTextField(tags, { tags = it }, label = { Text("برچسب‌ها با ویرگول جدا شوند") }, singleLine = true)
                 Text("اولویت")
@@ -324,7 +381,10 @@ fun TaskEditorDialog(
                             "زمان پایان باید بعد از زمان شروع باشد."
                         }
                         require(recurrence == null || normalizedDate != null) {
-                            "برای وظیفه تکرارشونده باید مهلت تعیین شود."
+                            "برای وظیفه تکرارشونده باید تاریخ شروع تعیین شود."
+                        }
+                        require(recurrence != "WEEKLY" || weeklyDays.isNotEmpty()) {
+                            "برای تکرار هفتگی حداقل یک روز انتخاب کن."
                         }
                         onSave(
                             TaskEntity(
@@ -335,8 +395,11 @@ fun TaskEditorDialog(
                                 dueDate = normalizedDate,
                                 startAt = normalizedStart,
                                 endAt = normalizedEnd,
-                                reminderAt = normalizedReminder,
-                                recurrenceRule = recurrence,
+                                reminderAt = if (reminderEnabled) normalizedReminder else null,
+                                recurrenceRule = when (recurrence) {
+                                    "WEEKLY" -> "WEEKLY:" + weekdays.filter { it.first in weeklyDays }.joinToString(",") { it.first }
+                                    else -> recurrence
+                                },
                                 recurrenceParentId = initial?.recurrenceParentId,
                                 priority = priority,
                                 tags = tags,
