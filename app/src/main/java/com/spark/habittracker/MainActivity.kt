@@ -448,7 +448,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase) {
                 )
                 3 -> Statistics(habits, allLogs, tasks, focusSessions)
                 4 -> ProgressHub(todayHabits, allLogs, todayLogs, taskHistory, settings) { updated -> scope.launch { dao.saveSettings(updated) } }
-                5 -> GoalsScreen(db.productivityDao(), tasks)
+                5 -> GoalsScreen(db.productivityDao(), tasks, habits)
                 6 -> FocusScreen(db.productivityDao())
                 else -> BackupScreen(db)
             }
