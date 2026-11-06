@@ -270,6 +270,7 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val habitRepository = container.habitRepository
     val productivityRepository = container.productivityRepository
     var destination by remember { mutableStateOf(SparkDestination.Dashboard) }
+    var moreNavigationExpanded by remember { mutableStateOf(false) }
     val tab = destination.tabIndex
     var date by remember { mutableStateOf(LocalDate.now()) }
     var currentDay by remember { mutableStateOf(LocalDate.now()) }
@@ -332,13 +333,44 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
                 Text(sparkTabTitles(settings.language)[tab], color = Muted, fontSize = 12.sp)
             }
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
-        bottomBar = { NavigationBar(containerColor = Panel) {
-            val navigationIcons = listOf(Icons.Default.Home, Icons.Default.Checklist, Icons.Default.CalendarMonth, Icons.Default.Insights, Icons.Default.EmojiEvents, Icons.Default.Flag, Icons.Default.Timer, Icons.Default.Folder)
-            sparkNavigationLabels(settings.language).forEachIndexed { i, label ->
-                NavigationBarItem(selected = tab == i, onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() }, icon = { Icon(navigationIcons[i], label) }, label = { Text(label) },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
+        bottomBar = {
+            Box {
+                NavigationBar(containerColor = Panel) {
+                    val navigationIcons = listOf(Icons.Default.Home, Icons.Default.Checklist, Icons.Default.CalendarMonth, Icons.Default.Insights)
+                    val labels = sparkNavigationLabels(settings.language)
+                    (0..3).forEach { i ->
+                        NavigationBarItem(
+                            selected = tab == i,
+                            onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() },
+                            icon = { Icon(navigationIcons[i], labels[i]) },
+                            label = { Text(labels[i], maxLines = 1) },
+                            colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet,
+                                indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted)
+                        )
+                    }
+                    NavigationBarItem(
+                        selected = tab >= 4,
+                        onClick = { moreNavigationExpanded = true },
+                        icon = { Icon(Icons.Default.MoreVert, localizedText(settings.language, "بیشتر", "More", "المزيد")) },
+                        label = { Text(localizedText(settings.language, "بیشتر", "More", "المزيد")) },
+                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet,
+                            indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted)
+                    )
+                }
+                DropdownMenu(expanded = moreNavigationExpanded, onDismissRequest = { moreNavigationExpanded = false },
+                    modifier = Modifier.align(Alignment.TopEnd)) {
+                    val labels = sparkNavigationLabels(settings.language)
+                    (4..7).forEach { i ->
+                        DropdownMenuItem(text = { Text(labels[i]) }, onClick = {
+                            destination = SparkDestination.fromTab(i)
+                            moreNavigationExpanded = false
+                        }, leadingIcon = {
+                            Icon(listOf(Icons.Default.EmojiEvents, Icons.Default.Flag, Icons.Default.Timer, Icons.Default.Folder)[i - 4], null)
+                        })
+                    }
+                }
             }
-        } },
+        },
         floatingActionButton = { if (tab == 0 || tab == 1 || tab == 2) FloatingActionButton(onClick = {
             when (tab) {
                 1 -> { editingTask = null; taskEditorOpen = true }
@@ -634,6 +666,7 @@ private fun Statistics(
     taskHistory: List<TaskCompletionEntity>,
     focusSessions: List<FocusSessionEntity>
 ) {
+    val language = LocalSparkLanguage.current
     val today = LocalDate.now()
     var periodDays by remember { mutableIntStateOf(7) }
     val report = remember(habits, logs, tasks, taskHistory, focusSessions, periodDays, today) {
@@ -641,8 +674,8 @@ private fun Statistics(
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Text("مرکز تحلیل Spark", color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("گزارش‌ها از سوابق ذخیره‌شده ساخته می‌شوند.", color = Muted, fontSize = 11.sp)
+            Text(localizedText(language, "مرکز تحلیل Spark", "Spark analytics", "تحليلات Spark"), color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(localizedText(language, "گزارش‌ها از سوابق ذخیره‌شده ساخته می‌شوند.", "Reports are based on saved activity.", "تعتمد التقارير على النشاط المحفوظ."), color = Muted, fontSize = 11.sp)
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -866,6 +899,7 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
 
 @Composable
 private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>, todayLogs: List<HabitLogEntity>, tasks: List<TaskEntity>, taskHistory: List<TaskCompletionEntity>, settings: UserSettingsEntity, onSettingsChange: (UserSettingsEntity) -> Unit) {
+    val language = LocalSparkLanguage.current
     val context = LocalContext.current
     var showColorStudio by remember { mutableStateOf(false) }
     var selectedSoundMode by remember { mutableStateOf(ReminderScheduler.soundMode(context)) }
@@ -982,8 +1016,12 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
             }
         }
         item {
+            Text("Powered by Ghaem", color = Muted, fontSize = 11.sp, letterSpacing = 1.sp,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("ظاهر برنامه", color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(localizedText(language, "ظاهر برنامه", "Appearance", "المظهر"), color = White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Text("تم", color = Muted, fontSize = 12.sp)
                 val themeOptions = listOf(
                     "neon" to "نئون بنفش",
@@ -1027,7 +1065,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                     Text("استودیو رنگ دلخواه")
                 }
 
-                Text("زبان برنامه", color = Muted, fontSize = 12.sp)
+                Text(localizedText(language, "زبان برنامه", "App language", "لغة التطبيق"), color = Muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     listOf("fa" to "فارسی", "en" to "English", "ar" to "العربية").forEach { (code, label) ->
                         FilterChip(
@@ -1038,7 +1076,7 @@ private fun ProgressHub(habits: List<HabitEntity>, allLogs: List<HabitLogEntity>
                     }
                 }
 
-                Text("صدای یادآوری", color = Muted, fontSize = 12.sp)
+                Text(localizedText(language, "صدای یادآوری", "Reminder sound", "صوت التذكير"), color = Muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     FilterChip(
                         selected = selectedSoundMode == "DEFAULT",
