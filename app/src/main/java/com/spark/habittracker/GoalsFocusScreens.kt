@@ -47,7 +47,13 @@ fun GoalsScreen(dao: ProductivityDao, tasks: List<TaskEntity>, modifier: Modifie
         items(goals, key = { it.id }) { goal ->
             val linkedIds by produceState(initialValue = emptyList<Long>(), goal.id) { value = dao.linkedTaskIds(goal.id) }
             val linkedTasks = tasks.filter { it.id in linkedIds }
-            val completed = linkedTasks.count { it.completed }
+            val completed = linkedTasks.count { task ->
+                task.completed && task.completedAt?.let { completedAt ->
+                    val completedDate = java.time.Instant.ofEpochMilli(completedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                    !completedDate.isBefore(LocalDate.parse(goal.startDate)) &&
+                        (goal.targetDate == null || !completedDate.isAfter(LocalDate.parse(goal.targetDate)))
+                } == true
+            }
             val progress = goalProgressRatio(completed, goal.targetValue)
             Card {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
