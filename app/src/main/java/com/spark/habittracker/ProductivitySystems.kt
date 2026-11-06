@@ -148,7 +148,7 @@ interface ProductivityDao {
     suspend fun insertGoal(goal: GoalEntity): Long
 
     @Query("UPDATE goals SET archived = 1, updatedAt = :updatedAt WHERE id = :goalId")
-    suspend fun archiveGoal(goalId: Long, updatedAt: Long = System.currentTimeMillis()): Int
+    suspend fun archiveGoal(goalId: Long, updatedAt: Long): Int
 
     @Query("UPDATE goals SET title = :title, description = :description, category = :category, targetValue = :targetValue, unit = :unit, period = :period, startDate = :startDate, targetDate = :targetDate, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateGoal(id: Long, title: String, description: String, category: String, targetValue: Double, unit: String, period: String, startDate: String, targetDate: String?, updatedAt: Long): Int
