@@ -72,7 +72,7 @@ class AlarmRingingService : Service() {
         ringtone?.stop()
         ringtone = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
-        else @Suppress("DEPRECATION") stopForeground(true)
+        else stopForeground(true)
         stopSelf()
     }
 
