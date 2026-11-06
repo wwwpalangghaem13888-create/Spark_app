@@ -657,7 +657,7 @@ private fun Statistics(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                listOf(7 to "۷ روز", 30 to "۳۰ روز", 90 to "۹۰ روز").forEach { (days, label) ->
+                listOf(7 to "۷ روز", 30 to "۳۰ روز", 90 to "۹۰ روز", 365 to "یک سال").forEach { (days, label) ->
                     FilterChip(selected = periodDays == days, onClick = { periodDays = days }, label = { Text(label) })
                 }
             }
@@ -675,6 +675,7 @@ private fun Statistics(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricCard("وظایف تکمیل‌شده", report.completedTasks.toString(), Modifier.weight(1f))
                 MetricCard("زمان تمرکز", (report.focusSeconds / 60).toString() + " دقیقه", Modifier.weight(1f))
+                MetricCard("نرخ وظایف", taskRate?.let { (it * 100).roundToInt().toString() + "٪" } ?: "بدون داده", Modifier.weight(1f))
             }
         }
         item {
@@ -698,6 +699,8 @@ private fun Statistics(
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(16.dp)) {
                 Text("جمع‌بندی دوره", color = White, fontWeight = FontWeight.Bold)
                 Text("روز پربازده: " + (report.bestDay?.toString() ?: "دادهٔ کافی نیست"), color = Muted, fontSize = 12.sp)
+                val bestCategory = report.categoryTaskCounts.maxByOrNull { it.value }
+                Text("دستهٔ پرتکرار: " + (bestCategory?.key ?: "دادهٔ کافی نیست"), color = Muted, fontSize = 12.sp)
                 Text("جلسات تمرکز: " + focusSessions.count { it.completed && it.endedAt != null }, color = Muted, fontSize = 12.sp)
                 Text("وظایف فعال: " + tasks.count { !it.completed && !it.archived }, color = Muted, fontSize = 12.sp)
                 Text("وظایف تکمیل‌شده در بازه: " + report.completedTasks, color = Muted, fontSize = 12.sp)
