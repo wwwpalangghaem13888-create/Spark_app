@@ -36,7 +36,7 @@ class SparkDatabaseMigrationTest {
 
         try {
             val sql = db.openHelper.writableDatabase
-            assertEquals(7, sql.version)
+            assertEquals(7, sql.version.toInt())
 
             assertEquals(1, db.habitDao().getAllHabits().size)
             assertEquals(1, db.habitDao().getAllLogs().size)
