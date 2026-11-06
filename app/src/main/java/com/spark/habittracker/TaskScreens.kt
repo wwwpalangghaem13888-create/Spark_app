@@ -68,6 +68,7 @@ fun TaskListScreen(
     archivedTasks: List<TaskEntity>,
     productivityDao: ProductivityDao
 ) {
+    val language = LocalSparkLanguage.current
     var showArchived by remember { mutableStateOf(false) }
     var selectedSubtaskTaskId by remember { mutableStateOf<Long?>(null) }
     var search by remember { mutableStateOf("") }
@@ -92,17 +93,17 @@ fun TaskListScreen(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("کارها", style = MaterialTheme.typography.headlineSmall)
+        Text(localizedText(language, "کارها", "Tasks", "المهام"), style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("جست‌وجوی عنوان، توضیح یا برچسب") },
+            label = { Text(localizedText(language, "جست‌وجوی عنوان، توضیح یا برچسب", "Search title, description or tag", "ابحث بالعنوان أو الوصف أو الوسم")) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("همه", "باز", "انجام‌شده", "عقب‌افتاده").forEachIndexed { index, label ->
+            listOf(localizedText(language, "همه", "All", "الكل"), localizedText(language, "باز", "Open", "مفتوحة"), localizedText(language, "انجام‌شده", "Done", "مكتملة"), localizedText(language, "عقب‌افتاده", "Overdue", "متأخرة")).forEachIndexed { index, label ->
                 FilterChip(
                     selected = filter == index,
                     onClick = { filter = index },
