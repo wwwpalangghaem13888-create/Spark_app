@@ -50,11 +50,14 @@ jobs:
           ram-size: 4096
           heap-size: 512
           script: |
-            gradle connectedDebugAndroidTest --stacktrace --info || {
+            set +e
+            gradle connectedDebugAndroidTest --stacktrace --info
+            test_status=$?
+            if [ "$test_status" -ne 0 ]; then
               mkdir -p app/build/outputs
               adb logcat -d -v threadtime > app/build/outputs/androidTest-logcat.txt
-              exit 1
-            }
+            fi
+            exit "$test_status"
 
       - name: Upload instrumentation diagnostics
         if: always()
