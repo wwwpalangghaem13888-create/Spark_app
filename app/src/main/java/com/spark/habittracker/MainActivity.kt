@@ -491,7 +491,11 @@ private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
             nextHabitReminder(habit, System.currentTimeMillis())?.let { triggerAt ->
                 val reminder = ReminderEntity(ownerType = "HABIT", ownerId = habitId, triggerAt = triggerAt)
                 val reminderId = db.productivityDao().insertReminder(reminder)
-                ReminderScheduler.schedule(context, reminder.copy(id = reminderId))
+                ReminderScheduler.schedule(
+                    context,
+                    reminder.copy(id = reminderId),
+                    alarmStyle = habit.reminderMode == "ALARM"
+                )
             }
         }
         editorOpen = false
