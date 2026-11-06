@@ -18,6 +18,7 @@ import java.util.Locale
 
 @Composable
 fun GoalsScreen(repository: ProductivityRepository, tasks: List<TaskEntity>, habits: List<HabitEntity>, modifier: Modifier = Modifier) {
+    val language = LocalSparkLanguage.current
     val goals by repository.observeGoals().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var editorOpen by remember { mutableStateOf(false) }
@@ -33,17 +34,17 @@ fun GoalsScreen(repository: ProductivityRepository, tasks: List<TaskEntity>, hab
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("اهداف من", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("پیشرفت فقط از فعالیت‌های ثبت‌شده محاسبه می‌شود.", style = MaterialTheme.typography.bodySmall)
+                    Text(localizedText(language, "هدف‌های من", "My goals", "أهدافي"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(localizedText(language, "پیشرفت بر اساس فعالیت‌هایی است که ثبت کرده‌ای.", "Progress is based on activity you have recorded.", "يُحسب التقدم بناءً على الأنشطة التي سجلتها."), style = MaterialTheme.typography.bodySmall)
                 }
-                Button(onClick = { title = ""; description = ""; target = "5"; targetDate = ""; selectedTaskIds = emptySet(); selectedHabitIds = emptySet(); error = null; editorOpen = true }) { Text("هدف جدید") }
+                Button(onClick = { title = ""; description = ""; target = "5"; targetDate = ""; selectedTaskIds = emptySet(); selectedHabitIds = emptySet(); error = null; editorOpen = true }) { Text(localizedText(language, "هدف جدید", "New goal", "هدف جديد")) }
             }
         }
         if (goals.isEmpty()) item {
             Card {
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("هنوز هدفی ثبت نشده است.")
-                    Text("یک هدف قابل‌اندازه‌گیری بساز و وظایف مرتبط را به آن وصل کن.", style = MaterialTheme.typography.bodySmall)
+                    Text(localizedText(language, "هنوز هدفی ثبت نکردی.", "You haven't added a goal yet.", "لم تضف هدفاً بعد."))
+                    Text(localizedText(language, "یک هدف مشخص بساز و کارهای مرتبط را به آن وصل کن.", "Create a measurable goal and link related tasks.", "أنشئ هدفاً قابلاً للقياس واربط به المهام المرتبطة."), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
