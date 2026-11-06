@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by db.habitDao().observeSettings().collectAsState(initial = null)
-            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(db.habitDao(), db, sparkViewModel) }
+            SparkTheme(settings ?: UserSettingsEntity()) { SparkApp(container, sparkViewModel) }
         }
     }
 }
@@ -116,16 +116,19 @@ private fun SparkTheme(settings: UserSettingsEntity, content: @Composable () -> 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SparkApp(dao: HabitDao, db: SparkDatabase, viewModel: SparkViewModel) {
+private fun SparkApp(container: SparkAppContainer, viewModel: SparkViewModel) {
     val context = LocalContext.current
-    var tab by remember { mutableIntStateOf(0) }
+    val db = container.database
+    val dao = db.habitDao()
+    val taskRepository = remember(container) { container.taskRepository }
+    var destination by remember { mutableStateOf(SparkDestination.Dashboard) }
+    val tab = destination.tabIndex
     var date by remember { mutableStateOf(LocalDate.now()) }
     var currentDay by remember { mutableStateOf(LocalDate.now()) }
     var editorOpen by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<HabitEntity?>(null) }
     var taskEditorOpen by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
-    val taskRepository = remember(db) { TaskRepository(db.taskDao()) }
     val taskState by viewModel.tasks.collectAsState()
     val tasks = (taskState as? SparkLoadState.Data)?.value.orEmpty()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -178,7 +181,7 @@ private fun SparkApp(dao: HabitDao, db: SparkDatabase, viewModel: SparkViewModel
         } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)) },
         bottomBar = { NavigationBar(containerColor = Panel) {
             listOf("خانه" to Icons.Default.Home, "وظایف" to Icons.Default.Checklist, "تقویم" to Icons.Default.CalendarMonth, "آمار" to Icons.Default.Insights, "پروفایل" to Icons.Default.EmojiEvents, "اهداف" to Icons.Default.Flag, "تمرکز" to Icons.Default.Timer, "پشتیبان" to Icons.Default.Folder).forEachIndexed { i, item ->
-                NavigationBarItem(selected = tab == i, onClick = { tab = i; if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
+                NavigationBarItem(selected = tab == i, onClick = { destination = SparkDestination.fromTab(i); if (i == 0) date = LocalDate.now() }, icon = { Icon(item.second, item.first) }, label = { Text(item.first) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = Violet, selectedTextColor = Violet, indicatorColor = PanelAlt, unselectedIconColor = Muted, unselectedTextColor = Muted))
             }
         } },
